@@ -412,6 +412,7 @@ function on_key(k)
   end
   if screen == "about" then
     local seq = { "up", "up", "down", "down", "left", "right" }
+    print("about key " .. tostring(k) .. " konami=" .. konami)
     if sys.millis() - konamiAt > 3000 then konami = 0 end
     konamiAt = sys.millis()
     if k == seq[konami + 1] then konami = konami + 1 else konami = (k == "up") and 1 or 0 end
