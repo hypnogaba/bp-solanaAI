@@ -49,14 +49,15 @@ local stamp = ui.label(180, 14, "", { size = 12, color = C.dim, w = 132, align =
 local dot = ui.rect(306, 30, 6, 6, { color = C.dim })     -- status dot: green / orange / red
 
 local BODY_Y = HEAD + 6
-local BODY_H = ui.H - BODY_Y - 16
-local footer = ui.label(8, ui.H - 30, "", { size = 12, color = C.dim, w = 304 })
+local FOOT_H = 16
+local BODY_H = ui.H - BODY_Y - 16 - FOOT_H
+local footer = ui.label(8, ui.H - 16 - FOOT_H + 2, "", { size = 12, color = C.dim, w = 304 })
 
 -- widgets (one per screen, shown/hidden) ----------------------------------
 local menu = ui.list(0, BODY_Y, ui.W, BODY_H, {}, {})
 local list = ui.list(0, BODY_Y, ui.W, BODY_H, {}, {})
 local map = ui.canvas(0, BODY_Y, MW, MH, { scale = 2, color = C.bg })           -- 320 x 148
-local mapNote = ui.label(8, BODY_Y + MH * 2 + 4, "", { size = 12, color = C.dim, w = 304 })
+local mapNote = ui.label(8, BODY_Y + MH * 2 - 14, "", { size = 12, color = C.dim, w = 304 })   -- over the empty south
 local qr = ui.qr and ui.qr(8, BODY_Y, 130, "https://doublezero.xyz") or nil
 local qrTitle = ui.label(150, BODY_Y + 10, "", { size = 20, color = C.text, w = 160 })
 local qrSub = ui.label(150, BODY_Y + 40, "", { size = 12, color = C.dim, w = 160 })
@@ -132,6 +133,7 @@ local function showOnly(which)
   menu:show(which == "menu")
   list:show(which == "list")
   map:show(which == "map") mapNote:show(which == "map")
+  footer:show(which ~= "map")
   local q = (which == "qr")
   if qr then qr:show(q) end
   qrTitle:show(q) qrSub:show(q) qrUrl:show(q) qrHint:show(q)
@@ -260,8 +262,10 @@ local function render()
     showOnly("qr") showJoin(joinIndex)
   elseif screen == "alerts" then
     showOnly("text") showAlerts()
+    subtitle:text("alerts")
   elseif screen == "about" then
     showOnly("text") showAbout()
+    subtitle:text("about")
   elseif screen == "lookupResult" then
     showOnly("list")
     ui.hint("SELECT search again   CANCEL back")
