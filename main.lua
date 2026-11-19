@@ -350,7 +350,11 @@ end
 menu:items(MENU)
 feed = storage.get("feed")
 updated = storage.get("updated")
-if feed then footer:text("cached") end
+if feed then footer:text("cached")
+elseif fs.exists("data/sample.json") then
+  feed = fs.json("data/sample.json")            -- demo snapshot until the first live fetch
+  footer:text("sample data, fetching live...")
+end
 render()
 refresh()
 timer.every(REFRESH_MS, refresh)
