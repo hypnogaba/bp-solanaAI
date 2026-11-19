@@ -8,7 +8,7 @@
 -- Falls back to the public /api/stats when the feed is unreachable.
 -- Bundled: data/world.png (160x74 land bitmap), data/metros.json, art/logo.png.
 
-local FEED_HOST  = "dz.ponyuk.info"                 -- also in app.json hosts and service.lua
+local FEED_HOST  = "dz-badge.YOUR-ACCOUNT.workers.dev"                 -- also in app.json hosts and service.lua
 local FEED_URL   = "https://" .. FEED_HOST .. "/badge.json"
 local LOOKUP_URL = "https://" .. FEED_HOST .. "/lookup?q="
 local STATS_URL  = "https://data.doublezero.xyz/api/stats"

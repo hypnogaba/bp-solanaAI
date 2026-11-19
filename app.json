@@ -8,5 +8,5 @@
   "accent": "14F195",
   "category": "tools",
   "permissions": ["http", "led", "background"],
-  "hosts": ["data.doublezero.xyz", "dz.ponyuk.info"]
+  "hosts": ["data.doublezero.xyz", "dz-badge.YOUR-ACCOUNT.workers.dev"]
 }
