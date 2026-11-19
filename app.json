@@ -1,12 +1,12 @@
 {
   "id": "dzstat",
   "name": "DZ Status",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "@hypnogaba",
-  "summary": "DoubleZero network map, stats and link status, live.",
+  "summary": "DoubleZero network map, stats, link health, validator lookup and community links.",
   "icon": "gps",
   "accent": "14F195",
   "category": "tools",
-  "permissions": ["http", "led"],
+  "permissions": ["http", "led", "background"],
   "hosts": ["data.doublezero.xyz", "dz-badge.example.workers.dev"]
 }

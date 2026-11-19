@@ -79,10 +79,40 @@ async function build() {
   return body;
 }
 
+// /lookup?q=<ip or pubkey prefix>: finds DZ users (validators / Edge clients) by client IP,
+// DZ IP or owner pubkey. Answer stays under 3 KB (at most 8 matches).
+let usersCache: { at: number; items: any[] } | null = null;
+async function lookup(q: string) {
+  if (!usersCache || Date.now() - usersCache.at > 120_000) {
+    const items: any[] = [];
+    for (let offset = 0; offset < 5000; offset += 500) {
+      const page = await fetch(`${DZ}/api/dz/users?limit=500&offset=${offset}`).then((r) => r.json());
+      items.push(...(page.items ?? []));
+      if (!page.items || page.items.length < 500) break;
+    }
+    usersCache = { at: Date.now(), items };
+  }
+  const needle = q.trim().toLowerCase();
+  if (needle.length < 3) return { users: [] };
+  const users = usersCache.items
+    .filter((u) => [u.client_ip, u.dz_ip, u.owner_pubkey].some((v) => String(v ?? '').toLowerCase().startsWith(needle)))
+    .slice(0, 8)
+    .map((u) => ({ ip: u.client_ip, owner: String(u.owner_pubkey ?? '').slice(0, 8) + '..', status: u.status, kind: u.kind,
+                   metro: u.metro_code ?? u.device_code?.slice(0, 3), device: u.device_code }));
+  return { users };
+}
+
 Bun.serve({
   port: Number(process.env.PORT ?? 8787),
   async fetch(req) {
-    if (new URL(req.url).pathname !== '/badge.json') return new Response('not found', { status: 404 });
+    const url = new URL(req.url);
+    if (url.pathname === '/lookup') {
+      try {
+        return new Response(JSON.stringify(await lookup(url.searchParams.get('q') ?? '')),
+          { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+      } catch (e) { return new Response(JSON.stringify({ error: String(e) }), { status: 502 }); }
+    }
+    if (url.pathname !== '/badge.json') return new Response('not found', { status: 404 });
     try {
       if (!cache || Date.now() - cache.at > TTL_MS) cache = { at: Date.now(), body: await build() };
     } catch (e) {
