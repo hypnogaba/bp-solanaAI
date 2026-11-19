@@ -75,6 +75,8 @@ local spinner, spinPos = nil, 0
 local metros = fs.json("data/metros.json") or {}
 local land = ui.load("data/world.png")
 local joinIndex = 1
+local konami, konamiAt = 0, 0           -- About screen: UP UP DOWN DOWN LEFT RIGHT
+local rickTimer = nil
 
 -- formatting ---------------------------------------------------------------
 local function fmtInt(n)
@@ -220,6 +222,30 @@ local function showAlerts()
                or "SELECT turns on a background check (once a minute) that toasts you when the network status changes or an incident appears.")
   text3:text(on and "SELECT turns it off." or "You will be asked to allow the service the first time.")
   ui.hint("SELECT toggle   CANCEL back")
+end
+
+local RICK = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+local function rickroll()
+  screen = "rick"
+  showOnly("qr")
+  if qr then qr:text(RICK) end
+  qrTitle:text("Never gonna")
+  qrSub:text("give you up")
+  qrUrl:text("scan me. trust me.")
+  subtitle:text("you found it")
+  ui.hint("CANCEL back")
+  local hue = 0
+  if rickTimer then timer.cancel(rickTimer) end
+  rickTimer = timer.every(60, function()
+    for i = 1, led.count do
+      local h = (hue + i * 40) % 240
+      local r = h < 80 and (80 - h) * 3 or (h > 160 and (h - 160) * 3 or 0)
+      local g = h < 80 and h * 3 or (h < 160 and (160 - h) * 3 or 0)
+      local b = h >= 80 and (h < 160 and (h - 80) * 3 or (240 - h) * 3) or 0
+      led.set(i, r, g, b)
+    end
+    hue = (hue + 8) % 240
+  end)
 end
 
 local function showAbout()
@@ -380,7 +406,18 @@ function on_key(k)
     end
     return false                                  -- CANCEL exits the app
   end
-  if k == "back" then go("menu") return true end
+  if k == "back" then
+    if rickTimer then timer.cancel(rickTimer) rickTimer = nil led.off() end
+    go("menu") return true
+  end
+  if screen == "about" then
+    local seq = { "up", "up", "down", "down", "left", "right" }
+    if sys.millis() - konamiAt > 3000 then konami = 0 end
+    konamiAt = sys.millis()
+    if k == seq[konami + 1] then konami = konami + 1 else konami = (k == "up") and 1 or 0 end
+    if konami == #seq then konami = 0 rickroll() end
+    return true
+  end
   if screen == "join" then
     if k == "right" then showJoin(joinIndex + 1) return true end
     if k == "left" then showJoin(joinIndex - 1) return true end
@@ -406,5 +443,6 @@ end
 
 function on_exit()
   if spinner then timer.cancel(spinner) end
+  if rickTimer then timer.cancel(rickTimer) end
   led.off()
 end
