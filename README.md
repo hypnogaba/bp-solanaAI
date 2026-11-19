@@ -1,8 +1,11 @@
 # DZ Status - DoubleZero stats on the Solana BP26 badge
 
-A Lua app for the Solana Breakpoint 2026 badge (ESP32-C5, Solana OS). Shows live DoubleZero
-network numbers from data.doublezero.xyz: validators on DZ, stake share, users, devices, links,
-metros, contributors, capacity and user inbound traffic.
+A Lua app for the Solana Breakpoint 2026 badge (ESP32-C5, Solana OS). Three tabs:
+
+- **Map**: world map with the 31 DoubleZero metros and the WAN routes between them
+  (purple 100G+, darker 10G, red when a link on the route is drained)
+- **Network**: validators on DZ, stake share, users, devices, links, metros, contributors, capacity, inbound
+- **Links**: overall status, current incidents, the five most loaded links
 
 ![DoubleZero](art/logo.png)
 
@@ -11,9 +14,12 @@ metros, contributors, capacity and user inbound traffic.
 | Path | What |
 | --- | --- |
 | `app.json` | Manifest: id `dzstat`, permissions `http` + `led`, host `data.doublezero.xyz` |
-| `main.lua` | The app. Network tab reads `GET /api/stats` directly (~300 bytes) |
+| `main.lua` | The app. Reads `FEED_URL` (the proxy), falls back to `data.doublezero.xyz/api/stats` |
+| `data/world.png` | 160x74 land bitmap (Natural Earth 110m), regenerate with `server/make_world.py` |
+| `data/metros.json` | Metro codes, names and coordinates (from `/api/dz/metros`) |
 | `art/logo.png` | DoubleZero icon, 16x18 px palette PNG, drawn at 2x in the header |
-| `server/badge.ts` | Optional Bun proxy that trims `/api/status` (65 KB) to a badge-sized Status tab |
+| `server/badge.ts` | Bun proxy: squeezes `/api/stats`, `/api/status` and `/api/dz/links` into a ~2 KB `badge.json` |
+| `server/sample/badge.json` | A real answer from the proxy, for tests |
 | `docs/BADGE_KNOWLEDGE.md` | Everything learned about the badge: hardware, Solana OS, Lua API, limits, workflow |
 | `docs/DZ_DATA_API.md` | Notes on the data.doublezero.xyz public endpoints |
 
@@ -31,10 +37,12 @@ Last good data is cached in the app's storage and shown when the badge is offlin
 4. Try in emulator, then Run on badge (Wi-Fi joined on the badge)
 5. Publish
 
-## Status tab (optional)
+## The feed
 
-`server/badge.ts` serves `/dz/status.json`. Deploy it over https, set `STATUS_URL` in `main.lua`
-and add its host to `hosts` in `app.json`.
+The badge accepts at most ~3.5 KB per http answer; the DZ endpoints with link data are 65-150 KB.
+`server/badge.ts` (Bun) fetches them every 30 s and serves `/badge.json` (~2 KB). Deploy it
+behind https, then set `FEED_URL` in `main.lua` and the host in `app.json` (`hosts`). Without
+the feed the app still shows the Network tab from the public `/api/stats`.
 
 ## License
 
