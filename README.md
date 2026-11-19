@@ -27,7 +27,8 @@ A status dot in the header shows the network state (green / orange / red) on eve
 | `data/world.png` | 160x74 land bitmap (Natural Earth 110m), regenerate with `server/make_world.py` |
 | `data/metros.json` | Metro codes, names and coordinates (from `/api/dz/metros`) |
 | `art/logo.png` | DoubleZero icon, 16x18 px palette PNG, drawn at 2x in the header |
-| `server/badge.ts` | Bun proxy: squeezes `/api/stats`, `/api/status` and `/api/dz/links` into a ~2 KB `badge.json` |
+| `worker/` | Cloudflare Worker feed (recommended): `/badge.json` and `/lookup`, see worker/README.md |
+| `server/badge.ts` | Same feed as a Bun server, if you prefer your own VPS |
 | `server/sample/badge.json` | A real answer from the proxy, for tests |
 | `docs/BADGE_KNOWLEDGE.md` | Everything learned about the badge: hardware, Solana OS, Lua API, limits, workflow |
 | `docs/DZ_DATA_API.md` | Notes on the data.doublezero.xyz public endpoints |
@@ -49,9 +50,9 @@ Last good data is cached in the app's storage and shown when the badge is offlin
 ## The feed
 
 The badge accepts at most ~3.5 KB per http answer; the DZ endpoints with link data are 65-150 KB.
-`server/badge.ts` (Bun) fetches them every 30 s and serves `/badge.json` (~2 KB) plus
-`/lookup?q=` for the Lookup screen. Deploy it behind https, then set `FEED_HOST` in `main.lua`,
-`FEED_URL` in `service.lua` and the host in `app.json` (`hosts`). Without the feed the app still
+`worker/worker.ts` (Cloudflare Worker, free) or `server/badge.ts` (Bun) fetch them and serve
+`/badge.json` (~2 KB) plus `/lookup?q=` for the Lookup screen. Deploy, then set `FEED_HOST` in
+`main.lua`, `FEED_URL` in `service.lua` and the host in `app.json` (`hosts`). Without the feed the app still
 shows the Network screen from the public `/api/stats`, and the map from the bundled snapshot.
 
 ## Testing in the emulator without an account

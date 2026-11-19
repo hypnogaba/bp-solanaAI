@@ -2,7 +2,7 @@
 -- owner when the network status changes or a new incident appears.
 -- Started from the Alerts screen (service.start). Survives app exit and reboot.
 
-local FEED_URL = "https://dz-badge.example.workers.dev/badge.json"
+local FEED_URL = "https://dz-badge.YOUR-ACCOUNT.workers.dev/badge.json"
 local PERIOD_S = 60
 
 local last = storage.get("svc_last") or { status = nil, issues = {} }
