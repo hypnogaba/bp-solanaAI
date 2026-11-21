@@ -1,3 +1,14 @@
 name = "dz-badge"
 main = "worker.ts"
 compatibility_date = "2026-11-01"
+
+# The puzzle map lives in one Durable Object (strongly consistent: no lost check-ins
+# when a crowd checks in at once). Needs a paid Workers plan.
+[durable_objects]
+bindings = [{ name = "MAP", class_name = "MapState" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MapState"]
+
+# Secret for POST /admin/season: npx wrangler secret put ADMIN_KEY
