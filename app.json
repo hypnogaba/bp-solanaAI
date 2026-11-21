@@ -1,12 +1,12 @@
 {
   "id": "dzstat",
-  "name": "DZ Status",
-  "version": "0.5.0",
+  "name": "DZ Map",
+  "version": "1.0.0",
   "author": "@hypnogaba",
-  "summary": "DoubleZero network map, stats, link health, validator lookup and community links.",
+  "summary": "Light the DoubleZero world map together: one puzzle piece per badge per day, from wherever you are.",
   "icon": "gps",
   "accent": "14F195",
   "category": "tools",
-  "permissions": ["http", "led", "background"],
-  "hosts": ["data.doublezero.xyz", "dz-badge.hypnogaba.workers.dev"]
+  "permissions": ["http", "led"],
+  "hosts": ["dz-badge.hypnogaba.workers.dev"]
 }

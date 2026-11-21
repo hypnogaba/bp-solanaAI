@@ -1,4 +1,4 @@
-# DZ Status badge app - project log
+# DZ Map (ex DZ Status) badge app - project log
 
 For whoever (human or agent) picks this up next. Read README.md first, then this.
 
@@ -67,3 +67,33 @@ feed), led (feedback), background (Alerts only if turned on). P.S. easter egg on
 - `ui.list` has show(); the map canvas (148 px) does not fit above the footer, so the footer is
   hidden on the map and the note sits over the empty south of the map
 - PNG for the badge: palette, not interlaced; the land map is 897 bytes, the icon 264 bytes
+
+
+## 2026-11-21: pivot to DZ Map 1.0
+
+Why: Juan (DoubleZero engineer) published "DoubleZero Monitor" in the badge store (stats, metro
+pair latency, diagnostics). DZ Status 0.5 duplicated that. Decision with Ivan: no network
+dashboards, focus on the ordinary badge user, make something unique: a collective puzzle.
+
+What changed:
+- main.lua rewritten: home = puzzle map (100 land pieces of world.png on an 8x8 grid), check-in
+  over `ws` to the worker (badge IP -> Cloudflare geo -> nearest metro, one piece per badge per
+  UTC day), metro browsing, About + QR, Mako the shark (pixel art, swims in the Pacific),
+  LED fiber wave. Easter eggs: UP x3 on the map (feeding frenzy), konami on About (rickroll).
+- Removed: Network, Links, Lookup, Alerts, service.lua, data/sample.json, `background` permission.
+- worker/worker.ts: `MapState` Durable Object (strongly consistent state), `wss /checkin` with
+  badge ticket verification (Ed25519, key from solana.com/breakpoint/badge/api/http/key),
+  `GET /map`, `POST /admin/season?key=`. Legacy `/badge.json` and `/lookup` kept for 0.5.
+- Tested: worker typechecks and ran locally (`wrangler dev --local --var DEV:1`, six simulated
+  check-ins over WebSocket: daily limit, metro lighting, no-geo path). main.lua compiles on
+  Lua 5.5 and ran in a Python/lupa fake badge (all screens, keys, offline and no-ws paths).
+  NOT yet run in the real emulator or on a badge (browser pane was unavailable).
+
+Open:
+- [ ] Ivan: deploy the worker (`cd worker && npx wrangler deploy`), set ADMIN_KEY secret
+- [ ] Ivan: drop app.json, main.lua, art/, data/ on the submit page, try in emulator, run on badge
+- [ ] Verify on the real badge that `ws.open` reaches the worker and the piece lands
+- [ ] Store listing text for 1.0 (summary is in app.json)
+- [ ] Paris is not a DZ metro (nearest: London 361 km): Ivan cannot light a metro from home
+- [ ] Ideas for 1.1: a web page showing the same map (worker `/map`), a "Faster than the
+      internet" minigame, the Mako quest/beacon once a QuestMaker role exists
