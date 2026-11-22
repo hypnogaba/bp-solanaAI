@@ -97,3 +97,10 @@ Open:
 - [ ] Paris is not a DZ metro (nearest: London 361 km): Ivan cannot light a metro from home
 - [ ] Ideas for 1.1: a web page showing the same map (worker `/map`), a "Faster than the
       internet" minigame, the Mako quest/beacon once a QuestMaker role exists
+
+## 2026-11-22: cleanup
+
+- Removed server/badge.ts and server/sample (Bun feed for 0.5), legacy /badge.json and /lookup
+  from the worker, rewrote worker/README.md. DZ_DATA_API.md kept as reference only.
+- Git history rewritten to drop the author's surname, personal domain and e-mail (public repo
+  rule: handle only). Commits are authored as hypnogaba <hypnogaba@users.noreply.github.com>.
