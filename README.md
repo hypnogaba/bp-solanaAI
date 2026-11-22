@@ -44,12 +44,12 @@ or expect test pieces on the live map.
 | `app.json` | Manifest: id `dzstat`, permissions `http` + `led`, host `dz-badge.hypnogaba.workers.dev` |
 | `main.lua` | The app |
 | `data/world.png` | 160x74 land bitmap (Natural Earth 110m), regenerate with `server/make_world.py` |
+| `docs/DZ_DATA_API.md` | Notes on data.doublezero.xyz (reference; the app only uses `/api/dz/metros`) |
 | `data/metros.json` | Metro codes, names and coordinates (from `/api/dz/metros`) |
 | `art/logo.png` | DoubleZero icon, 16x18 px palette PNG, drawn at 2x in the header |
-| `worker/worker.ts` | Cloudflare Worker: `wss /checkin`, `GET /map`, legacy `/badge.json` and `/lookup` |
+| `worker/worker.ts` | Cloudflare Worker: `wss /checkin`, `GET /map`, `POST /admin/season` |
 | `worker/wrangler.toml` | Worker config with the `MapState` Durable Object |
 | `docs/BADGE_KNOWLEDGE.md` | Everything learned about the badge: hardware, Solana OS, Lua API, limits, workflow |
-| `docs/DZ_DATA_API.md` | Notes on the data.doublezero.xyz public endpoints |
 | `docs/PROJECT_LOG.md` | History and open items, for the next agent |
 
 ## Deploy the worker
