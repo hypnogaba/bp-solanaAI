@@ -30,6 +30,7 @@ local LINKS = {
   { title = "Website",  sub = "doublezero.xyz",      url = "https://doublezero.xyz" },
   { title = "Discord",  sub = "community",           url = "https://discord.gg/doublezero" },
   { title = "Source",   sub = "this app, MIT",       url = "https://github.com/hypnogaba/dz-map" },
+  { title = "Made by",  sub = "@hypnogaba on X",     url = "https://x.com/hypnogaba" },
 }
 
 -- The DoubleZero shark. What it says when the app opens.
