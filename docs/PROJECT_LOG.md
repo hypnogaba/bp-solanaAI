@@ -104,3 +104,19 @@ Open:
   from the worker, rewrote worker/README.md. DZ_DATA_API.md kept as reference only.
 - Git history rewritten to drop the author's surname, personal domain and e-mail (public repo
   rule: handle only). Commits are authored as hypnogaba <hypnogaba@users.noreply.github.com>.
+
+## 2026-11-23: DZ Map 1.1 - the puzzle is personal
+
+Ivan's test of 1.0: Wi-Fi did not join, nothing happened, and the "piece nearest to you" rule
+means places with no badge holders (Australia) never get revealed. Decision: everyone can
+complete the whole map alone, offline, with a timing game per piece; location is a bonus.
+
+- main.lua: cursor on the tile grid, "lay the fiber" timing game (speed and green width scale
+  with pieces and season), perks at 10/25/50/75/100 (titles, Mako skins, metro names, season 2),
+  daily fiber, home turf, metro boost, streak frenzy. Menu on CANCEL (next piece, about, QR,
+  exit); konami on the menu = rickroll. Progress in storage key "g" (100-char string).
+- worker: community counters per badge (pieces, season, metros visited) instead of a shared
+  puzzle; /checkin waits up to 700 ms for the badge's {n, s} message, then answers with
+  you.{near, km, metro, home, boost} and c.{pieces, badges, done, metros}.
+- Tested in the lupa fake badge: miss / retry / hit / perfect, boost, perks, 100th piece and
+  season rollover, menu, about, QR, konami. Not yet in the real emulator.

@@ -1,41 +1,53 @@
-# DZ Map - light the DoubleZero world map together (Solana BP26 badge)
+# DZ Map - lay the fiber, light the world (Solana BP26 badge)
 
 A Lua app for the Solana Breakpoint 2026 badge (ESP32-C5, Solana OS 2.x). The world map
-(160x74) is cut into **100 land pieces**. Every badge with Wi-Fi reveals **one piece per day**,
-the dark piece nearest to where the badge is. A badge within 300 km of a DoubleZero metro
-lights that metro too. When all 100 pieces are lit, the season is complete.
+(160x74) is cut into **100 land pieces**, all dark. Pick a piece with the d-pad and lay the
+fiber: a packet runs along the line, press SELECT while it is in the green and the piece lights
+up. Miss, and the packet took the public internet. The more pieces you have, the faster the
+packet and the narrower the green. Everything is yours and stays on the badge: **no Wi-Fi needed**.
 
-Mako, the DoubleZero shark, swims in the Pacific and keeps count.
+Mako, the DoubleZero shark, swims in the Pacific, changes colour with your title, and goes
+into a feeding frenzy on a streak of five.
 
 ## Screens and keys
 
-- **Home**: the puzzle map. Dark land = not yet revealed, purple = revealed, bright purple =
-  your pieces, green = today's piece. Metros: green square = lit, grey dot = dark.
-  Two status lines: pieces / metros / badges, and your own line (where you are, your pieces,
-  when your next piece unlocks).
-  - SELECT: check in (one piece today) / refresh
-  - LEFT / RIGHT: browse the 31 metros (highlight on the map, how many badges lit it)
-  - DOWN: about
-  - CANCEL: exit
-- **About**: what DoubleZero is, credits, SELECT for QR codes (X, website, Discord, source).
-- Easter eggs: one on the map, one on About. You know the code.
+- **Home**: the puzzle map with a cursor. Dark land = not yet lit, purple = lit, green = lit
+  this session. Metros: green square = on a lit piece, grey dot = dark, cyan = your home metro.
+  Status: pieces, title, season; the region under the cursor and its metros.
+  - d-pad: move the cursor between pieces
+  - SELECT: lay fiber on this piece (or start the next season when the map is complete)
+  - CANCEL: menu
+- **Lay the fiber**: the packet runs from one metro to another. SELECT in the green = the piece
+  is lit; dead centre = PERFECT, one extra piece. Miss: SELECT to try again, CANCEL to go back.
+- **Menu**: next dark piece, about, links and QR codes (X, website, Discord, source), exit.
+  The community line shows how many pieces all badges have laid, when Wi-Fi was on once.
 
-## How the check-in works
+## Perks and bonuses
+
+| Pieces | Title | Also |
+| --- | --- | --- |
+| 10 | cable layer | Mako turns aqua |
+| 25 | metro builder | Mako turns violet |
+| 50 | backbone | metro names appear on the map |
+| 75 | exchange point | Mako turns green |
+| 100 | doublezero | the map glows, season 2 unlocks: faster packets, same world |
+
+- **Daily fiber**: the first piece of the day brings one extra.
+- **Home turf**: with Wi-Fi, the worker finds the DoubleZero metro nearest to you; pieces
+  around it bring one extra.
+- **Metro boost**: the first time you check in within 300 km of a DoubleZero metro, three
+  pieces around it light up at once. Travel to another metro, get another boost.
+- **Streak of five**: feeding frenzy.
+
+## What the worker does
 
 Plain `http` from a badge goes through the badge server, so a web server never sees the
 badge's own IP. `ws` (WebSocket, Solana OS 0.5.1+) goes straight from the badge to our host,
-so the Cloudflare Worker sees the badge's public IP and Cloudflare's geolocation of it
-(city, lat/lon). The worker:
-
-1. verifies the signed `badge_ticket` the badge adds to the URL (badge id, user id, Ed25519),
-2. finds the nearest DoubleZero metro; within 300 km it lights that metro for this badge,
-3. reveals the unrevealed piece nearest to the badge, once per badge per UTC day,
-4. answers with the whole map state (~400 bytes) and closes.
-
-Without `ws` (old firmware) or when the socket fails, the app reads the same state over
-`GET /map` (no check-in) and keeps showing the last map from storage when offline.
-Emulator badges (ids starting with `e`) check in like real ones, so test on the real badge
-or expect test pieces on the live map.
+so the Cloudflare Worker sees the badge's public IP and Cloudflare's geolocation of it. On
+check-in the app sends its progress; the worker verifies the signed `badge_ticket`, records
+progress and metros visited per badge, and answers with the nearest metro, the boost flag and
+the community totals. Without `ws` or Wi-Fi the game is unchanged; only the bonuses and the
+community line need it.
 
 ## Layout
 
@@ -47,7 +59,7 @@ or expect test pieces on the live map.
 | `docs/DZ_DATA_API.md` | Notes on data.doublezero.xyz (reference; the app only uses `/api/dz/metros`) |
 | `data/metros.json` | Metro codes, names and coordinates (from `/api/dz/metros`) |
 | `art/logo.png` | DoubleZero icon, 16x18 px palette PNG, drawn at 2x in the header |
-| `worker/worker.ts` | Cloudflare Worker: `wss /checkin`, `GET /map`, `POST /admin/season` |
+| `worker/worker.ts` | Cloudflare Worker: `wss /checkin` (progress up, bonus + community down), `GET /map`, `POST /admin/season` |
 | `worker/wrangler.toml` | Worker config with the `MapState` Durable Object |
 | `docs/BADGE_KNOWLEDGE.md` | Everything learned about the badge: hardware, Solana OS, Lua API, limits, workflow |
 | `docs/PROJECT_LOG.md` | History and open items, for the next agent |

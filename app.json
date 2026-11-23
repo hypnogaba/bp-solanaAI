@@ -1,9 +1,9 @@
 {
   "id": "dzstat",
   "name": "DZ Map",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "@hypnogaba",
-  "summary": "Light the DoubleZero world map together: one puzzle piece per badge per day, from wherever you are.",
+  "summary": "Lay fiber across the world map: a 100-piece puzzle with a timing game, perks and Mako the shark. No Wi-Fi needed.",
   "icon": "gps",
   "accent": "14F195",
   "category": "tools",
