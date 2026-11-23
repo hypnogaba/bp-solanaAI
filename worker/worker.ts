@@ -4,10 +4,12 @@
 //                          verifies the badge ticket, locates the badge by its IP (Cloudflare geo),
 //                          records progress + metros visited, answers with community totals and
 //                          the location bonus (near a DoubleZero metro = boost, first time only).
-//   GET  /map              community totals over plain http (through the badge server)
+//   GET  /map              community totals and the top scores over plain http
+//   GET  /share?s=..&r=..  a page for X with a picture card (the badge shows a QR to an X post
+//                          that links here); GET /card.png is the picture
 //   POST /admin/season?key=<ADMIN_KEY>   wipe the community counters
 //
-// The puzzle itself (100 land tiles of data/world.png) is personal and lives on the badge.
+// The puzzle itself (13 regions of data/world.png, one per contributor) is personal and lives on the badge.
 //
 // Deploy: cd worker && npx wrangler deploy   (needs the MAP durable object, see wrangler.toml)
 
@@ -17,11 +19,14 @@ export interface Env {
   DEV?: string;
 }
 
+import CARD from './card.png';
+
 const APP = 'dzstat';
 // Badge server key (solana.com itself sits behind a Vercel checkpoint that answers fetches with HTML).
 const KEY_URL = 'https://badge-api.solana.com/api/http/key';
 const DZ = 'https://data.doublezero.xyz';
-const METRO_KM = 300;
+const PIECES = 13;
+const METRO_KM = 500;   // metro boost radius; the home metro is the nearest one at any distance
 const JSON_HEADERS = { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' };
 
 // DoubleZero metros, refreshed from /api/dz/metros when reachable (this is the fallback).
@@ -51,8 +56,9 @@ async function metros(): Promise<Metro[]> {
     const r = await fetch(`${DZ}/api/dz/metros?limit=200`, { cf: { cacheTtl: 3600 }, signal: AbortSignal.timeout(2000) })
       .then((x) => x.json<any>());
     const list = (r.items ?? [])
-      .filter((m: any) => m.code && typeof m.lat === 'number' && typeof m.lon === 'number')
-      .map((m: any) => ({ code: String(m.code).toLowerCase(), n: String(m.name ?? m.code), la: m.lat, lo: m.lon }));
+      .map((m: any) => ({ code: String(m.code ?? '').toLowerCase(), n: String(m.name ?? m.code),
+                          la: Number(m.latitude ?? m.lat), lo: Number(m.longitude ?? m.lon) }))
+      .filter((m: Metro) => /^[a-z]{3}$/.test(m.code) && Number.isFinite(m.la) && Number.isFinite(m.lo));
     if (list.length >= 10) metrosCache = { at: Date.now(), list };
   } catch {
     metrosCache = { ...metrosCache, at: Date.now() - 3600_000 + 300_000 }; // keep the last list, retry in 5 min
@@ -106,10 +112,16 @@ async function fromBadgeSocket(req: Request): Promise<{ badge: string; user: str
 // The puzzle itself is personal and lives on the badge. The worker only knows, per badge, how
 // many pieces it has and which metros it has been near, to give a location bonus and to show
 // "community: N pieces by M badges, K complete".
-type Badge = { n: number; s: number; m: Record<string, true>; at: number; home: string | null };
+type Badge = { n: number; s: number; m: Record<string, true>; at: number; home: string | null; best?: number; name?: string };
 type State = { badges: Record<string, Badge>; checkins: number };
 type Who = { badge: string; user: string; lat: number | null; lon: number | null; city: string; country: string;
-             n?: number; s?: number };
+             n?: number; s?: number; best?: number; name?: string };
+
+/** A name safe to show on a 320 px screen: printable ASCII, 16 chars at most. */
+function cleanName(v: unknown): string {
+  const n = String(v ?? '').replace(/[^\x20-\x7E]/g, '').trim().slice(0, 16);
+  return n || 'anon';
+}
 
 export class MapState {
   state: DurableObjectState;
@@ -123,12 +135,15 @@ export class MapState {
     let pieces = 0, done = 0;
     const metros: Record<string, number> = {};
     for (const b of Object.values(s.badges)) {
-      pieces += b.n + Math.max(0, b.s - 1) * 100;
-      if (b.n >= 100 || b.s > 1) done++;
+      pieces += Math.min(b.n, PIECES) + Math.max(0, b.s - 1) * PIECES;
+      if (b.n >= PIECES || b.s > 1) done++;
       for (const m of Object.keys(b.m)) metros[m] = (metros[m] ?? 0) + 1;
     }
     const lit = Object.entries(metros).sort((a, b) => b[1] - a[1]);
-    return { c: { pieces, badges: Object.keys(s.badges).length, done, metros: lit }, at: Math.floor(Date.now() / 1000), you };
+    const top = Object.values(s.badges).filter((b) => (b.best ?? 0) > 0)
+      .sort((a, b) => (b.best ?? 0) - (a.best ?? 0)).slice(0, 9)
+      .map((b) => ({ n: b.name ?? 'anon', s: b.best ?? 0 }));
+    return { c: { pieces, badges: Object.keys(s.badges).length, done, metros: lit, top }, at: Math.floor(Date.now() / 1000), you };
   }
 
   async fetch(req: Request): Promise<Response> {
@@ -153,7 +168,14 @@ export class MapState {
     const b: Badge = s.badges[who.badge] ?? { n: 0, s: 1, m: {}, at: now, home: null };
     s.badges[who.badge] = b;
     s.checkins++;
-    if (typeof who.n === 'number' && who.n >= 0 && who.n <= 100) b.n = Math.floor(who.n);
+    // 1.2 and older count 100 pieces: clamp to the 13 regions.
+    if (typeof who.n === 'number' && who.n >= 0) b.n = Math.min(PIECES, Math.floor(who.n));
+    // Best score for the leaderboard. The badge is trusted (the ticket proves which badge it is),
+    // but keep it in a sane range: a perfect season is about 15 000 points, x20 seasons.
+    if (typeof who.best === 'number' && Number.isFinite(who.best) && who.best > 0 && who.best <= 1_000_000) {
+      b.best = Math.max(b.best ?? 0, Math.floor(who.best));
+      b.name = cleanName(who.name);
+    }
     // A season takes 100 pieces: a badge can move up at most one season per check-in, and
     // never past 20, so one badge cannot inflate the community total.
     if (typeof who.s === 'number' && who.s >= 1) b.s = Math.min(20, Math.floor(who.s), b.s + 1);
@@ -169,7 +191,9 @@ export class MapState {
     const onMetro = near && near.km <= METRO_KM ? near.code : null;
     let boost = false;                       // first time this badge is near this metro
     if (onMetro && !b.m[onMetro]) { b.m[onMetro] = true; boost = true; }
-    if (onMetro && !b.home) b.home = onMetro;
+    // Home = the nearest DoubleZero metro wherever the badge is (Paris -> London, 365 km), so the
+    // HOME METRO secret works for everyone with Wi-Fi; the boost still needs a metro within METRO_KM.
+    if (near && !b.home) b.home = near.code;
     await this.state.storage.put('c', s);
 
     const you = { near: near ? near.code : null, km: near ? Math.round(near.km) : null, metro: onMetro,
@@ -206,7 +230,7 @@ export default {
           const t = setTimeout(() => resolve({}), 700);
           server.addEventListener('message', (ev) => {
             clearTimeout(t);
-            try { const d = JSON.parse(String(ev.data)); resolve({ n: d.n, s: d.s }); } catch { resolve({}); }
+            try { const d = JSON.parse(String(ev.data)); resolve({ n: d.n, s: d.s, best: d.best, name: d.name }); } catch { resolve({}); }
           });
         });
         ctx.waitUntil((async () => {
@@ -220,6 +244,22 @@ export default {
           }
         })());
         return new Response(null, { status: 101, webSocket: client });
+      }
+      if (url.pathname === '/card.png') {
+        return new Response(CARD, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' } });
+      }
+      if (url.pathname === '/share') {
+        const score = Math.max(0, Math.min(10_000_000, Math.floor(Number(url.searchParams.get('s')) || 0)));
+        const regions = Math.max(0, Math.min(PIECES, Math.floor(Number(url.searchParams.get('r')) || 0)));
+        const title = `DZ Map: ${regions}/${PIECES} regions on DoubleZero fiber, score ${score}`;
+        const desc = 'Light the world map on the Solana Breakpoint badge: one region per DoubleZero contributor.';
+        const img = `${url.origin}/card.png`;
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+<meta name="twitter:card" content="summary_large_image"><meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}"><meta property="og:image" content="${img}">
+<meta name="twitter:image" content="${img}"><meta http-equiv="refresh" content="0; url=https://doublezero.xyz">
+</head><body><a href="https://doublezero.xyz">doublezero.xyz</a></body></html>`;
+        return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
       }
       if (url.pathname === '/map') {
         const body = await map.fetch('https://map/state').then((r) => r.text());

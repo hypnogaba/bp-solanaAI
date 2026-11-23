@@ -1,1 +1,1 @@
-{ "compilerOptions": { "target": "es2022", "module": "es2022", "moduleResolution": "bundler", "strict": true, "noEmit": true, "types": ["@cloudflare/workers-types"], "lib": ["es2022"] }, "include": ["worker.ts"] }
+{ "compilerOptions": { "target": "es2022", "module": "es2022", "moduleResolution": "bundler", "strict": true, "noEmit": true, "types": ["@cloudflare/workers-types"], "lib": ["es2022"] }, "include": ["worker.ts", "png.d.ts"] }

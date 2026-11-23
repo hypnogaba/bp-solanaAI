@@ -12,3 +12,9 @@ tag = "v1"
 new_sqlite_classes = ["MapState"]
 
 # Secret for POST /admin/season: npx wrangler secret put ADMIN_KEY
+
+# The X share picture (worker/card.png, made by tools/make_card.py) is bundled as bytes.
+[[rules]]
+type = "Data"
+globs = ["**/*.png"]
+fallthrough = false

@@ -155,3 +155,21 @@ Open:
 - [ ] Deploy the worker: `cd worker && npx wrangler deploy` from the Mac (wrangler is logged in),
       or add the CLOUDFLARE_API_TOKEN repo secret so the Action works
 - [ ] Publish 1.2.0 on the submit page (app.json, main.lua, art/, data/), try in emulator, run on badge
+
+## 2026-11-23: DZ Map 1.3 - 13 regions, bouncing packet, 3 lives, leaderboard, share on X
+Ivan tested 1.2 on the badge: no Wi-Fi bonus (Paris is 365 km from London, the nearest metro,
+and the boost needed 300 km; the app said nothing), the packet too slow and dull, 100 pieces too
+many, "Mako" should just be the shark. Asked for: 13 pieces (one per contributor; the API lists
+15, 13 with devices), each harder; a packet that bounces and changes speed, stopped in the green
+in the middle; 3 lives, then everything starts over; a full-screen dance at 13/13; an online
+leaderboard; share on X with a picture, @doublezero once; a new secret instead of the frenzy.
+- Map: the 100 land tiles grouped into 13 named regions (TILE_REGION); 1.2 saves migrate (a
+  region is lit when at least half of its tiles were).
+- Round: 3 + lit/4 splices; pass time 950 ms -> 260 ms floor, x0.6..1.5 per pass, but never so
+  fast that one 16 ms tick moves more than 60% of the green (the green narrows 40 -> 12 px).
+  Splice points paid only when the region is lit (no CANCEL farming). 6 passes without SELECT = miss.
+- Worker: home = nearest metro at any distance, boost within 500 km; metros API fields are
+  latitude/longitude (the live list never loaded before); 13 regions; best score + name per badge,
+  top 9 in /map; /share page with og/twitter card tags and /card.png (tools/make_card.py).
+- Secret DOUBLE ZERO (2 PERFECT in a row) replaces FEEDING FRENZY.
+- Tests: tools/fake_badge.py, 73 checks.

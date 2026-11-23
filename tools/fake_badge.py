@@ -116,7 +116,10 @@ class Badge:
         self.L.execute(src + "\n__G = function() return G end; __screen = function() return screen end;"
                        " __game = function() return game end; __loading = function() return loading end;"
                        " __next = function() local j = nearestDark(cursor) cursor = j startGame(j) end;"
-                       " __apply = apply; __cursor = function() return cursor end; __count = count")
+                       " __apply = apply; __cursor = function() return cursor end; __count = count;"
+                       " __party = function() return party end; __shareQr = function() return shareQr end;"
+                       " __lb = function() return lbRows end; __N = N; __start = startGame;"
+                       " __track_step = function() return TRACK * GAME_TICK / passTime() end")
 
     def _exit(self):
         self.exited = True
@@ -193,89 +196,229 @@ def check(name, ok):
         fails += 1
 
 
-def play_round(b, aim="centre"):
-    """Press SELECT when the packet is at the green's centre (or 'miss' far from it)."""
-    for _ in range(400):
+def wait_run(b):
+    """Tick through the get-ready pause."""
+    for _ in range(100):
+        gm = b.g("__game")
+        if gm is None or gm.done or gm.t > 0:
+            return
+        b.tick(10)
+
+
+def splice(b, aim="centre"):
+    """One SELECT: at the green's centre, or 'miss' at the start of the track."""
+    wait_run(b)
+    for _ in range(2000):
         gm = b.g("__game")
         if gm is None or gm.done:
             return
         px = gm.x + 5
         centre = gm.zx + gm.zw / 2
-        if aim == "centre" and gm.t >= 0 and abs(px - centre) <= 2:
+        if gm.t > 0 and ((aim == "centre" and abs(px - centre) <= 1.5) or (aim == "miss" and px < gm.zx - 20)):
             b.key("select")
             return
-        b.tick(10)
+        b.tick(2)
 
 
-# 1. first launch: splash, how to play, home
+def lay_region(b):
+    """Splice until the round ends (all PERFECT)."""
+    for _ in range(10):
+        gm = b.g("__game")
+        if gm is None or gm.done:
+            return
+        splice(b)
+
+
+def fresh(**kw):
+    b = Badge(**kw)
+    b.tick(30, 60)
+    if b.g("__screen") == "howto":
+        b.key("back")
+    return b
+
+
+# 1. first launch: splash, how to play (4 pages), home
 b = Badge(ws_answer=None)
 b.tick(30, 60)
 check("first launch shows how to play", b.g("__screen") == "howto")
-for _ in range(3):
+for _ in range(4):
     b.key("select")
 check("how to play ends on the map", b.g("__screen") == "home")
+check("13 regions", b.L.globals().__N == 13)
 
 # 2. the stuck check-in clears itself (ws never answers)
 check("startup check-in is loading", b.g("__loading") is True)
 b.tick(30, 300)
 check("watchdog: loading clears after 8 s without an answer", b.g("__loading") is False)
 
-# 3. a round: get-ready pause, a PERFECT hit, the secret, no timer overflow
+# 3. a round: get ready, the packet bounces with changing speed, splices light the region
 b.key("select")
 check("SELECT starts a round", b.g("__screen") == "game")
-check("packet waits a moment before it runs", b.g("__game").t < 0)
+gm = b.g("__game")
+check("packet waits a moment before it runs", gm.t < 0)
 b.key("select")
-check("SELECT during get ready is ignored, not a miss", not b.g("__game").done)
-play_round(b)
-check("PERFECT hit lit pieces", b.g("__count") >= 2)
+check("SELECT during get ready is ignored, not a miss", not gm.done)
+check("first region of the day: one splice less (3 -> 2)", gm.need == 2)
+check("the green is in the middle of the track", abs(gm.zx + gm.zw / 2 - 160) <= 1)
+wait_run(b)
+dirs, muls = set(), set()
+for _ in range(300):
+    b.tick(10)
+    dirs.add(gm.dir)
+    muls.add(gm.mul)
+    if gm.passes >= 4:
+        break
+check("the packet bounces back and forth", dirs == {1, -1} and gm.passes >= 1)
+check("the speed changes between passes", len(muls) >= 2)
+check("the packet stays on the track", 0 <= gm.pos <= 1)
+b.key("back")
+b.key("select")                       # new round on the same region
+lay_region(b)
+check("all splices PERFECT: region lit", b.g("__count") == 1)
 check("PERFECT counts as a secret", b.g("__G").sec["perfect"] is True)
+check("two PERFECT in a row: DOUBLE ZERO secret", b.g("__G").sec["zero"] is True)
+check("score counts splices and the region", b.g("__G").score >= 2 * 150 + 500)
+check("first of the day spent", b.g("__G").day != "")
 b.tick(30, 100)
-check("back on the map after the round", b.g("__screen") == "home")
+check("back on the map after the region", b.g("__screen") == "home")
 
-# 4. a streak of five with all bonuses: never more than 8 timers
-for _ in range(9):
-    b.key("select")
-    play_round(b)
-    b.tick(30, 60)
-check("feeding frenzy counts as a secret", b.g("__G").sec["frenzy"] is True)
+# 4. three lives: a miss costs one, the third ends the run and the map goes dark
+b.key("select")
+gm = b.g("__game")
+check("second region: 3 splices", gm.need == 3)
+splice(b, "miss")
+check("a miss costs a life", b.g("__G").lives == 2)
+b.key("select")
+check("SELECT after a miss retries the region", b.g("__game").done is False)
+splice(b, "miss")
+b.key("select")
+wait_run(b)
+for _ in range(2000):                 # third: no SELECT at all, the packet times out
+    if b.g("__game").done:
+        break
+    b.tick(10)
+G = b.g("__G")
+check("no SELECT for 6 passes is a miss", b.g("__game").done)
+check("out of lives: map dark, lives back to 3, new run", b.g("__count") == 0 and G.lives == 3 and G.score == 0 and G.runs == 1)
+check("best score kept", G.top >= 800)
+b.key("select")
+check("after game over SELECT does not start a round", b.g("__game").over is True)
 check(f"at most 8 timers at once (peak {b.maxt})", b.maxt <= 8)
 check(f"under 200k instructions per callback (peak {b.maxi})", b.maxi < 200000)
 
-# 5. hit, CANCEL, new round within 1.5 s: the old return-to-map does not cut it short
-b.key("select")
-play_round(b)
-b.key("back")
-b.g("__next")
-b.tick(30, 20)  # 0.6 s: inside the new round's get-ready + run
-b.tick(30, 40)
-gm = b.g("__game")
-check("new round is not ended by the previous round's timer", b.g("__screen") == "game" or (gm and gm.done))
+# 4b. CANCEL mid-region: splice points are paid only when the region is lit (no farming)
+b12 = fresh(ws_answer=None)
+b12.key("select")
+score0 = b12.g("__G").score
+for _ in range(5):
+    splice(b12)                       # one splice, then walk away
+    b12.key("back")
+    b12.key("select")
+check("splice, CANCEL, again: the score does not grow", b12.g("__G").score == score0 and b12.g("__G").top == score0)
 
-# 6. worker answers with an unknown metro and a boost: no crash
-b2 = Badge(ws_answer=json.dumps({"c": {"pieces": 5, "badges": 2, "done": 0}, "you": {"boost": True, "metro": "zzz", "home": "zzz"}}))
+# 4c. the last region of season 3 at the fastest pass: the packet never jumps over the green
+b13 = fresh(ws_answer=None)
+G = b13.g("__G")
+G.p = "1" * 12 + "0"
+G.s = 3
+b13.L.globals().__start(13)
+gm = b13.g("__game")
+gm.mul = 0.6
+L = b13.L.globals()
+step = L.__track_step()
+check(f"fastest pass moves {step:.1f} px per 16 ms tick, under 60% of the {gm.zw} px green", step <= gm.zw * 0.6 + 0.01)
+lay_region(b13)
+check("the last region of season 3 can be laid", b13.g("__count") == 13)
+
+# 5. the whole map: party, share on X, next season
+b6 = fresh(ws_answer=None)
+G = b6.g("__G")
+G.p = "1" * 12 + "0"
+G.score = 9000
+b6.key("back")                        # menu
+b6.key("select")                      # next dark region
+lay_region(b6)
+b6.tick(30, 60)
+check("13/13: the party screen", b6.g("__screen") == "party")
+check("lives bonus added", b6.g("__G").score >= 9000 + 500 + 3000)
+pt = b6.g("__party")
+frames = set()
+for _ in range(40):
+    b6.tick(30)
+    frames.add(pt.f)
+check("the dancer dances (frames change)", len(frames) >= 3)
+check("party objects shown", all(o.shown for o in pt.all.values()))
+b6.key("up")
+check("UP on the party: share on X", b6.g("__screen") == "share")
+url = b6.g("__shareQr").txt
+check("share QR is an X post with a link to the card page", url.startswith("https://x.com/intent/post?text=") and "%2Fshare%3Fs%3D" in url)
+check("@doublezero once", url.count("%40doublezero") == 1)
+check("share QR fits (under 260 chars)", len(url) < 260)
+b6.key("back")
+check("CANCEL from share: back to the party", b6.g("__screen") == "party")
+b6.key("select")
+check("SELECT: next season, map dark", b6.g("__G").s == 2 and b6.g("__count") == 0)
+
+# 6. worker answers with an unknown metro and a boost: no crash, the boost is banked
+b2 = Badge(ws_answer=json.dumps({"c": {"pieces": 5, "badges": 2, "done": 0}, "you": {"boost": True, "metro": "zzz", "home": "zzz", "km": 365}}))
 b2.tick(30, 80)
 check("unknown metro from the worker: no crash, community saved", b2.storage.get("c") is not None)
 b2.tick(30, 80)
-check("unknown home metro is kept (homeTile copes)", b2.g("__G").home == "zzz")
+check("unknown home metro is kept", b2.g("__G").home == "zzz")
+check("home toast shows the distance", any("365 km" in t for t in b2.toasts))
+check("boost banked", b2.g("__G").bank == 1)
 b2.key("back")
 b2.tick(30, 30)
 check("map still draws with an unknown home metro", b2.g("__screen") in ("home", "menu", "howto"))
 
-# 7. a real metro: home secret and boost
+# 7. a real metro: home secret, home region and the boost make the round shorter
 metros = json.load(open(os.path.join(ROOT, "data/metros.json")))
-code = sorted(metros)[0]
-b3 = Badge(ws_answer=json.dumps({"c": {"pieces": 5, "badges": 2, "done": 0}, "you": {"boost": True, "metro": code, "home": code}}))
+b3 = fresh(ws_answer=json.dumps({"c": {"pieces": 5, "badges": 2, "done": 0}, "you": {"boost": True, "metro": "lon", "home": "lon", "km": 365}}))
 b3.tick(30, 120)
-check("home metro stored", b3.g("__G").home == code)
-check("home metro counts as a secret", b3.g("__G").sec["home"] is True)
-check("metro boost lit pieces", b3.g("__count") >= 1)
+G = b3.g("__G")
+check("home metro stored", G.home == "lon")
+check("home metro counts as a secret", G.sec["home"] is True)
+if b3.g("__screen") != "home":
+    b3.key("back")
+b3.L.globals().__start(5)             # Western Europe: London's region
+gm = b3.g("__game")
+check("home + first of the day + boost: 3 -> 2 (never under 2)", gm.need == 2 and len(list(gm.used.values())) == 3)
+lay_region(b3)
+check("boost spent when the region is lit", b3.g("__G").bank == 0)
+sent = [json.loads(m) for m in b3.sent]
+check("check-in sends progress, best score and a name", sent and all(k in sent[0] for k in ("n", "s", "best", "name")))
 
 # 8. garbage from the worker: no crash
 b4 = Badge(ws_answer="{not json")
 b4.tick(30, 80)
 check("garbage answer: still running", b4.g("__screen") in ("howto", "home"))
 
-# 9. menu: Secrets screen, konami rickroll, exit
+# 9. leaderboard from the worker, share from the board
+top = [{"n": "alice", "s": 9000}, {"n": "bob", "s": 700}]
+b7 = fresh(ws_answer=json.dumps({"c": {"pieces": 5, "badges": 2, "done": 0, "top": top}}))
+b7.tick(30, 40)
+b7.key("back")
+for _ in range(3):
+    b7.key("down")
+b7.key("select")
+check("menu item 4 opens the leaderboard", b7.g("__screen") == "board")
+rows = [r.txt for r in b7.g("__lb").values()]
+check("board lists the top players", "alice" in rows[0] and "9000" in rows[0] and "bob" in rows[1])
+b7.key("up")
+check("UP on the board: share on X", b7.g("__screen") == "share")
+b7.key("back")
+check("CANCEL from share: back to the board", b7.g("__screen") == "board")
+b7.key("back")
+check("CANCEL from the board: menu", b7.g("__screen") == "menu")
+b8 = fresh(ws_answer=None)
+b8.tick(30, 300)
+b8.key("back")
+for _ in range(3):
+    b8.key("down")
+b8.key("select")
+check("no board yet: a clear message", "Wi-Fi" in b8.g("__lb")[1].txt or "loading" in b8.g("__lb")[1].txt)
+
+# 10. menu: Secrets screen, konami rickroll, exit
 b5 = Badge(storage={"g": None})
 b5.tick(30, 60)
 b5.key("back")             # skip how to play
@@ -295,30 +438,42 @@ b5.key("back")
 b5.key("back")
 b5.key("back")
 check("menu again", b5.g("__screen") == "menu")
-for _ in range(6):
+for _ in range(7):
     b5.key("down")
 b5.key("select")
 check("Exit leaves the app", b5.exited)
 
-# 10. an install from 1.0.1 or a partial save: no crash, old keys removed
-old = Badge(storage={"map": "x" * 100, "updated": 123,
-                     "g": None})
+# 11. installs from 1.2 and older: 100 tiles become 13 regions, old keys removed
+old = Badge(storage={"map": "x" * 100, "updated": 123, "g": None})
 old.tick(30, 60)
 check("1.0.x storage keys removed", "map" not in old.storage and "updated" not in old.storage)
-b9 = Badge(storage={"g": {"p": "1" + "0" * 99}})
+b9 = Badge(storage={"g": {"p": "1" * 100, "sec": {"frenzy": True, "perfect": True}}})
 b9.tick(30, 60)
-check("partial save (only p) loads and keeps the piece", b9.g("__count") == 1 and b9.g("__G").hits == 0)
+check("1.2 save with all 100 tiles: 13/13 regions", b9.g("__count") == 13)
+check("1.2 secret FEEDING FRENZY dropped, others kept", b9.g("__G").sec["frenzy"] is None and b9.g("__G").sec["perfect"] is True)
+check("1.2 save gets 3 lives and a score", b9.g("__G").lives == 3 and b9.g("__G").score == 0)
+b9b = Badge(storage={"g": {"p": "1" + "0" * 99}})
+b9b.tick(30, 60)
+check("1.2 save with one tile: no region lit", b9b.g("__count") == 0)
 
-# 11. all four secrets: rainbow Mako, no crash on the map
-b10 = Badge(ws_answer=json.dumps({"c": {"pieces": 1, "badges": 1, "done": 0}, "you": {"home": code}}))
+# 12. all four secrets: rainbow shark, no crash on the map
+b10 = Badge(ws_answer=json.dumps({"c": {"pieces": 1, "badges": 1, "done": 0}, "you": {"home": "lon"}}))
 b10.tick(30, 80)
 G = b10.g("__G")
-for k in ("perfect", "frenzy", "rick"):
+for k in ("perfect", "zero", "rick"):
     G.sec[k] = True
 b10.key("back")
 b10.tick(30, 200)
 check("all secrets: map keeps running", b10.g("__screen") == "home")
 check("all secrets toast", any("Secret" in t or "secrets" in t for t in b10.toasts))
+
+# 13. cursor moves between regions in every direction and stays valid
+b11 = fresh(ws_answer=None)
+seen = set()
+for k in ["right"] * 8 + ["down"] * 4 + ["left"] * 8 + ["up"] * 4 + ["right", "down"] * 6:
+    b11.key(k)
+    seen.add(b11.g("__cursor"))
+check(f"the cursor reaches many regions ({len(seen)})", len(seen) >= 10 and all(1 <= c <= 13 for c in seen))
 
 print("all passed" if fails == 0 else f"{fails} FAILED")
 sys.exit(1 if fails else 0)

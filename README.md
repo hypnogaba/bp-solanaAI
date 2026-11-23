@@ -1,43 +1,45 @@
-# DZ Map - lay the fiber, light the world (Solana BP26 badge)
+# DZ Map - light the world on DoubleZero fiber (Solana BP26 badge)
 
-A Lua app for the Solana Breakpoint 2026 badge (ESP32-C5, Solana OS 2.x). The world map
-(160x74) is cut into **100 land pieces**, all dark. Pick a piece with the d-pad and lay the
-fiber: a packet runs along the line, press SELECT while it is in the green and the piece lights
-up. Miss, and the packet took the public internet. The more pieces you have, the faster the
-packet and the narrower the green. Everything is yours and stays on the badge: **no Wi-Fi needed**.
+An arcade run for the Solana Breakpoint 2026 badge (ESP32-C5, Solana OS 2.x). The world map
+(160x74) is cut into **13 regions, one for each DoubleZero contributor**, all dark. Pick a
+region and splice the fiber: a packet bounces between two metros, sometimes slow, sometimes
+fast; press SELECT while it is in the green in the middle. A region takes 3 to 6 splices in a
+row, and every region is faster and narrower than the last. **3 lives**: a miss costs one, and
+when they are gone the map goes dark and the run starts over. Light all 13 for a full-screen
+dance, then the next season is faster still. Plays without Wi-Fi; with Wi-Fi your best score goes
+on the **online leaderboard** and you can **share on X** (a QR; the post links a picture card).
 
-Mako, the DoubleZero shark, swims in the Pacific, changes colour with your title, and goes
-into a feeding frenzy on a streak of five.
+The DoubleZero shark swims in the Pacific and changes colour with your title.
 
 ## Screens and keys
 
-- **Home**: the puzzle map with a cursor. Dark land = not yet lit, purple = lit, green = lit
-  this session. Metros: green square = on a lit piece, grey dot = dark, cyan = your home metro.
-  Status: pieces, title, season; the region under the cursor and its metros.
-  - d-pad: move the cursor between pieces
-  - SELECT: lay fiber on this piece (or start the next season when the map is complete)
-  - CANCEL: menu
-- **Lay the fiber**: the packet runs from one metro to another. SELECT in the green = the piece
-  is lit; dead centre = PERFECT, one extra piece. Miss: SELECT to try again, CANCEL to go back.
-- **Menu**: next dark piece, how to play, secrets (hints for the four secrets; all four make Mako a rainbow), about, links and QR codes (X, website, Discord, source), settings, exit.
-  The community line shows how many pieces all badges have laid, when Wi-Fi was on once.
+- **Home**: the map with a cursor around one region. Dark land = not yet lit, purple = lit,
+  green = lit this session. Metros: green square = in a lit region, grey dot = dark, cyan = your
+  home metro. Status: regions, lives, score, title, season; the region under the cursor and its metros.
+  - d-pad: move between regions; SELECT: splice this region (or start the next season); CANCEL: menu
+- **Splice**: SELECT with the packet in the green = one splice; dead centre = PERFECT (+50).
+  Points for the splices are paid when the region is lit. Miss, or no SELECT for 6 passes: a life.
+- **Party** (13/13): a dancer and two sharks. SELECT next season, UP share on X, CANCEL map.
+- **Menu**: next dark region, how to play, secrets (hints for the four secrets; all four make the
+  shark a rainbow), leaderboard (UP share on X), about, links and QR codes, settings, exit.
 
 ## Perks and bonuses
 
-| Pieces | Title | Also |
+| Regions | Title | Also |
 | --- | --- | --- |
-| 10 | cable layer | Mako turns aqua |
-| 25 | metro builder | Mako turns violet |
-| 50 | backbone | metro names appear on the map |
-| 75 | exchange point | Mako turns green |
-| 100 | doublezero | the map glows, season 2 unlocks: faster packets, same world |
+| 2 | cable layer | the shark turns aqua |
+| 4 | metro builder | the shark turns violet |
+| 7 | backbone | metro names appear on the map |
+| 10 | exchange point | the shark turns green |
+| 13 | doublezero | the dance; next season: faster packets, same world |
 
-- **Daily fiber**: the first piece of the day brings one extra.
-- **Home turf**: with Wi-Fi, the worker finds the DoubleZero metro nearest to you; pieces
-  around it bring one extra.
-- **Metro boost**: the first time you check in within 300 km of a DoubleZero metro, three
-  pieces around it light up at once. Travel to another metro, get another boost.
-- **Streak of five**: feeding frenzy.
+Each of these makes a region need one splice less (never under 2):
+- **First of the day**: the first region you light each day.
+- **Home**: with Wi-Fi the worker finds the DoubleZero metro nearest to you (any distance, e.g.
+  Paris -> London, 365 km); its region is home.
+- **Metro boost**: the first check-in within 500 km of a DoubleZero metro banks one (up to 3).
+
+Score: 100 per splice (+50 PERFECT), 500 per region, 1000 per life left at 13/13, all x season.
 
 ## What the worker does
 
