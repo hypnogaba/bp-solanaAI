@@ -1228,7 +1228,7 @@ ui.hint("")
 wave(C.accent, 1)
 later(1600, function()
   if screen ~= "splash" then return end
-  if G.seen then go("home") else howtoPage = 1 go("howto") end
+  go("home")                                               -- the map first; How to play is in the menu
 end)
 lastSync = count()
 checkin(true)

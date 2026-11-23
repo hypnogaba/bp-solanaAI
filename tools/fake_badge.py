@@ -240,10 +240,7 @@ def fresh(**kw):
 # 1. first launch: splash, how to play (4 pages), home
 b = Badge(ws_answer=None)
 b.tick(30, 60)
-check("first launch shows how to play", b.g("__screen") == "howto")
-for _ in range(4):
-    b.key("select")
-check("how to play ends on the map", b.g("__screen") == "home")
+check("first launch opens the map, not the how-to", b.g("__screen") == "home")
 check("13 regions", b.L.globals().__N == 13)
 
 # 2. the stuck check-in clears itself (ws never answers)
@@ -421,8 +418,7 @@ check("no board yet: a clear message", "Wi-Fi" in b8.g("__lb")[1].txt or "loadin
 # 10. menu: Secrets screen, konami rickroll, exit
 b5 = Badge(storage={"g": None})
 b5.tick(30, 60)
-b5.key("back")             # skip how to play
-b5.key("back")             # menu
+b5.key("back")             # menu (the app opens on the map)
 check("CANCEL opens the menu", b5.g("__screen") == "menu")
 b5.key("down")
 b5.key("down")
@@ -462,7 +458,6 @@ b10.tick(30, 80)
 G = b10.g("__G")
 for k in ("perfect", "zero", "rick"):
     G.sec[k] = True
-b10.key("back")
 b10.tick(30, 200)
 check("all secrets: map keeps running", b10.g("__screen") == "home")
 check("all secrets toast", any("Secret" in t or "secrets" in t for t in b10.toasts))
