@@ -120,3 +120,6 @@ complete the whole map alone, offline, with a timing game per piece; location is
   you.{near, km, metro, home, boost} and c.{pieces, badges, done, metros}.
 - Tested in the lupa fake badge: miss / retry / hit / perfect, boost, perks, 100th piece and
   season rollover, menu, about, QR, konami. Not yet in the real emulator.
+- 1.1 also: splash (Mako, 1.6 s), How to play (3 pages on first run, then from the menu),
+  Settings (LEDs on/off, reset progress, stats). Worker deploys from GitHub Actions on push to
+  main (worker/**) using the CLOUDFLARE_API_TOKEN repo secret: no token in chat or in the sandbox.

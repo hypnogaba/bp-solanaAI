@@ -131,13 +131,13 @@ local gMsg = ui.label(8, GY + 30, "", { size = 14, color = C.text, w = 304 })
 local gHint = ui.label(8, GY + 54, "", { size = 12, color = C.dim, w = 304 })
 
 -- menu / about / qr ------------------------------------------------------------------------
-local MENU = { "Lay fiber on the next dark piece", "About DZ Map", "Links and QR codes", "Exit" }
+local MENU = { "Lay fiber on the next dark piece", "How to play", "About DZ Map", "Links and QR codes", "Settings", "Exit" }
 local menuSel = 1
 local menuRows = {}
 for i = 1, #MENU do
-  menuRows[i] = ui.label(16, BODY_Y + 8 + (i - 1) * 26, "", { size = 14, color = C.text, w = 296 })
+  menuRows[i] = ui.label(16, BODY_Y + 4 + (i - 1) * 21, "", { size = 14, color = C.text, w = 296 })
 end
-local menuFoot = ui.label(8, BODY_Y + 120, "", { size = 12, color = C.dim, w = 304 })
+local menuFoot = ui.label(8, BODY_Y + 132, "", { size = 12, color = C.dim, w = 304 })
 
 local bigMako = ui.image(8, BODY_Y + 2, makoRows("b", true), { scale = 3 })
 local aboutTitle = ui.label(80, BODY_Y + 2, "", { size = 20, color = C.text, w = 232 })
@@ -151,6 +151,27 @@ local qrSub = ui.label(150, BODY_Y + 40, "", { size = 12, color = C.dim, w = 160
 local qrUrl = ui.label(150, BODY_Y + 60, "", { size = 12, color = C.accent, w = 160 })
 local qrHint = ui.label(150, BODY_Y + 100, "scan with your phone", { size = 12, color = C.dim, w = 160 })
 
+-- splash, how to play, settings ------------------------------------------------------------
+local splashMako = ui.image(100, BODY_Y + 10, makoRows("b", true), { scale = 6 })
+local splashTitle = ui.label(0, BODY_Y + 76, "DZ Map", { size = 20, color = C.text, w = 320, align = "center" })
+local splashSub = ui.label(8, BODY_Y + 100, "", { size = 12, color = C.dim, w = 304, align = "center" })
+local HOWTO = {
+  { "1. Pick a piece", "The world is 100 dark pieces. Move the cursor with the d-pad and press SELECT on a dark one. Each piece is one more bit of the world on DoubleZero fiber." },
+  { "2. Lay the fiber", "A packet runs from one metro to another. Press SELECT while it is inside the green zone. Dead centre is PERFECT and brings an extra piece. Miss, and the packet took the public internet: try again." },
+  { "3. Get faster, get perks", "More pieces, faster packets, narrower green. Titles and Mako skins at 10, 25, 50, 75, 100. First piece of the day brings one extra. With Wi-Fi, being near a DoubleZero metro brings a boost." },
+}
+local howtoPage = 1
+local howtoTitle = ui.label(8, BODY_Y + 4, "", { size = 20, color = C.text, w = 304 })
+local howtoText = ui.label(8, BODY_Y + 32, "", { size = 12, color = C.dim, w = 304 })
+local howtoFoot = ui.label(8, BODY_Y + 128, "", { size = 12, color = C.accent, w = 304 })
+local SETTINGS = { "LEDs", "Reset progress", "Back" }
+local setSel = 1
+local setRows = {}
+for i = 1, #SETTINGS do
+  setRows[i] = ui.label(16, BODY_Y + 8 + (i - 1) * 26, "", { size = 14, color = C.text, w = 296 })
+end
+local setFoot = ui.label(8, BODY_Y + 100, "", { size = 12, color = C.dim, w = 304 })
+
 -- state -------------------------------------------------------------------------------------
 local screen = "home"
 local metros = fs.json("data/metros.json") or {}
@@ -162,6 +183,9 @@ local G = storage.get("g")
 if type(G) ~= "table" or type(G.p) ~= "string" or #G.p ~= N then
   G = { p = string.rep("0", N), s = 1, hits = 0, miss = 0, streak = 0, best = 0, day = "", home = nil }
 end
+if G.leds == nil then G.leds = true end
+if G.seen == nil then G.seen = false end                   -- how-to-play shown once
+local function ledsOn() return G.leds ~= false end
 local community = storage.get("c")                          -- last answer from the worker
 local cursor = 1
 local sock, gotMsg, loading = nil, false, false
@@ -266,7 +290,7 @@ end
 
 -- LEDs --------------------------------------------------------------------------------------
 local function spinStart()
-  if spinner then return end
+  if spinner or not ledsOn() then return end
   spinPos = 0
   spinner = timer.every(70, function()
     led.off()
@@ -279,6 +303,7 @@ local function spinStop()
   led.off()
 end
 local function wave(colour, times)
+  if not ledsOn() then return end
   local step, n = 0, (times or 2) * (led.count + 2)
   local t
   t = timer.every(45, function()
@@ -297,6 +322,7 @@ local function wave(colour, times)
   end)
 end
 local function flash(colour)
+  if not ledsOn() then return end
   for i = 1, led.count do led.hex(i, colour) end
   timer.after(220, led.off)
 end
@@ -373,6 +399,13 @@ local function showOnly(which)
   local q = which == "qr"
   if qr then qr:show(q) end
   qrTitle:show(q) qrSub:show(q) qrUrl:show(q) qrHint:show(q)
+  local sp = which == "splash"
+  splashMako:show(sp) splashTitle:show(sp) splashSub:show(sp)
+  local h = which == "howto"
+  howtoTitle:show(h) howtoText:show(h) howtoFoot:show(h)
+  local st = which == "settings"
+  for _, r in ipairs(setRows) do r:show(st) end
+  setFoot:show(st)
 end
 
 local function showJoin(i)
@@ -423,6 +456,24 @@ render = function()
   elseif screen == "qr" then
     showOnly("qr")
     showJoin(joinIndex)
+  elseif screen == "howto" then
+    showOnly("howto")
+    subtitle:text("how to play  " .. howtoPage .. "/" .. #HOWTO)
+    howtoTitle:text(HOWTO[howtoPage][1])
+    howtoText:text(HOWTO[howtoPage][2])
+    howtoFoot:text(howtoPage < #HOWTO and "SELECT next" or "SELECT start laying fiber")
+    ui.hint("SELECT next   CANCEL skip")
+  elseif screen == "settings" then
+    showOnly("settings")
+    subtitle:text("settings")
+    for i, r in ipairs(setRows) do
+      local label = SETTINGS[i]
+      if i == 1 then label = label .. ": " .. (ledsOn() and "on" or "off") end
+      r:text((i == setSel and "> " or "  ") .. label)
+      r:color(i == setSel and C.accent or C.text)
+    end
+    setFoot:text(string.format("hits %d   misses %d   best streak %d   season %d", G.hits, G.miss, G.best, G.s))
+    ui.hint("UP/DOWN   SELECT   CANCEL back")
   end
 end
 
@@ -769,12 +820,45 @@ function on_key(k, rep)
       if menuSel == 1 then
         local j = nearestDark(cursor)
         if j then cursor = j startGame(j) else go("home") end
-      elseif menuSel == 2 then go("about")
-      elseif menuSel == 3 then joinIndex = 1 go("qr")
+      elseif menuSel == 2 then howtoPage = 1 go("howto")
+      elseif menuSel == 3 then go("about")
+      elseif menuSel == 4 then joinIndex = 1 go("qr")
+      elseif menuSel == 5 then setSel = 1 go("settings")
       else return false end                                  -- CANCEL-like: exit the app
       return true
     end
     if k == "back" then go("home") return true end
+    return true
+  end
+  if screen == "splash" then
+    return true                                              -- it ends by itself
+  end
+  if screen == "howto" then
+    if k == "select" then
+      if howtoPage < #HOWTO then howtoPage = howtoPage + 1 render() else G.seen = true save() go("home") end
+    elseif k == "back" then G.seen = true save() go("home") end
+    return true
+  end
+  if screen == "settings" then
+    if k == "up" then setSel = (setSel - 2) % #SETTINGS + 1 render() return true end
+    if k == "down" then setSel = setSel % #SETTINGS + 1 render() return true end
+    if k == "select" then
+      if setSel == 1 then G.leds = not ledsOn() save() led.off() render()
+      elseif setSel == 2 then
+        ui.confirm("Reset all progress? Pieces, perks and season go back to zero.", function(yes)
+          if yes then
+            G = { p = string.rep("0", N), s = 1, hits = 0, miss = 0, streak = 0, best = 0, day = "", home = G.home, leds = G.leds, seen = true }
+            fresh = {}
+            save()
+            applySkin()
+            ui.toast("Fresh map. Mako forgets nothing, but fine.")
+            go("home")
+          end
+        end)
+      else go("menu") end
+      return true
+    end
+    if k == "back" then go("menu") return true end
     return true
   end
   if k == "back" then
@@ -810,7 +894,17 @@ do
   cursor = (h and nearestDark(h)) or nearestDark(27) or 1    -- 27 = Europe, a friendly start
 end
 applySkin()
-say(MAKO_SAYS[(sys.millis() + (sys.time() or 0)) % #MAKO_SAYS + 1])
-render()
+local line = MAKO_SAYS[(sys.millis() + (sys.time() or 0)) % #MAKO_SAYS + 1]
+say(line)
+screen = "splash"
+showOnly("splash")
+splashMako:set(makoRows(perk(count()).skin, true))
+splashSub:text(line)
+ui.hint("")
+wave(C.accent, 1)
+timer.after(1600, function()
+  if screen ~= "splash" then return end
+  if G.seen then go("home") else howtoPage = 1 go("howto") end
+end)
 lastSync = count()
-checkin(false)
+checkin(true)

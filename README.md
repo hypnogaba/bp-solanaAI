@@ -66,6 +66,9 @@ community line need it.
 
 ## Deploy the worker
 
+Automatic: `.github/workflows/deploy-worker.yml` deploys on every push to `main` that touches
+`worker/`, using the `CLOUDFLARE_API_TOKEN` repository secret (Actions secrets). Manual:
+
 ```
 cd worker
 npm install                      # typescript, wrangler, workers-types (dev only)
