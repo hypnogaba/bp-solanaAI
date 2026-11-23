@@ -18,7 +18,8 @@ export interface Env {
 }
 
 const APP = 'dzstat';
-const SITE = 'https://solana.com/breakpoint/badge';
+// Badge server key (solana.com itself sits behind a Vercel checkpoint that answers fetches with HTML).
+const KEY_URL = 'https://badge-api.solana.com/api/http/key';
 const DZ = 'https://data.doublezero.xyz';
 const METRO_KM = 300;
 const JSON_HEADERS = { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' };
@@ -71,9 +72,13 @@ let fetchedAt = 0;
 async function badgeKey(id: string): Promise<CryptoKey | null> {
   if (!keys.has(id) && Date.now() - fetchedAt > 60_000) {
     fetchedAt = Date.now();
-    const k = await (await fetch(`${SITE}/api/http/key`)).json<any>();
-    const raw = Uint8Array.from(atob(k.key), (c) => c.charCodeAt(0));
-    keys.set(k.id, await crypto.subtle.importKey('raw', raw, 'Ed25519', false, ['verify']));
+    try {
+      const k = await (await fetch(KEY_URL, { signal: AbortSignal.timeout(3000) })).json<any>();
+      const raw = Uint8Array.from(atob(k.key), (c) => c.charCodeAt(0));
+      keys.set(k.id, await crypto.subtle.importKey('raw', raw, 'Ed25519', false, ['verify']));
+    } catch {
+      return null; // key server down or not JSON: refuse this ticket, try again in a minute
+    }
   }
   return keys.get(id) ?? null;
 }
@@ -86,8 +91,12 @@ async function fromBadgeSocket(req: Request): Promise<{ badge: string; user: str
   const key = await badgeKey(keyId);
   if (!key) return null;
   const signed = ['badge-ws-v1', url.host, APP, badge, user, time, request].join('\n');
-  const raw = Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-  if (!(await crypto.subtle.verify('Ed25519', key, raw, new TextEncoder().encode(signed)))) return null;
+  let ok = false;
+  try {
+    const raw = Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+    ok = await crypto.subtle.verify('Ed25519', key, raw, new TextEncoder().encode(signed));
+  } catch { /* malformed signature */ }
+  if (!ok) return null;
   for (const [k, t] of seen) if (Date.now() - t > 120_000) seen.delete(k);
   seen.set(request, Date.now());
   return { badge, user };

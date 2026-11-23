@@ -82,7 +82,7 @@ What changed:
   LED fiber wave. Easter eggs: UP x3 on the map (feeding frenzy), konami on About (rickroll).
 - Removed: Network, Links, Lookup, Alerts, service.lua, data/sample.json, `background` permission.
 - worker/worker.ts: `MapState` Durable Object (strongly consistent state), `wss /checkin` with
-  badge ticket verification (Ed25519, key from solana.com/breakpoint/badge/api/http/key),
+  badge ticket verification (Ed25519, key from badge-api.solana.com/api/http/key),
   `GET /map`, `POST /admin/season?key=`. Legacy `/badge.json` and `/lookup` kept for 0.5.
 - Tested: worker typechecks and ran locally (`wrangler dev --local --var DEV:1`, six simulated
   check-ins over WebSocket: daily limit, metro lighting, no-geo path). main.lua compiles on
