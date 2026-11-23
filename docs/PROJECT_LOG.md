@@ -123,3 +123,35 @@ complete the whole map alone, offline, with a timing game per piece; location is
 - 1.1 also: splash (Mako, 1.6 s), How to play (3 pages on first run, then from the menu),
   Settings (LEDs on/off, reset progress, stats). Worker deploys from GitHub Actions on push to
   main (worker/**) using the CLOUDFLARE_API_TOKEN repo secret: no token in chat or in the sandbox.
+
+## 2026-11-23: DZ Map 1.2 - fixes and secrets
+
+Why: the store had 1.0.1 (needs the worker), and the 1.0/1.1 worker was never deployed: the GitHub
+Action failed because the repo has no CLOUDFLARE_API_TOKEN secret, so Cloudflare still ran the
+0.5 feed (`/map` and `/checkin` answered 404). 1.1 had only been run in a fake badge; a review
+found crash and UX bugs before it reached players.
+
+- Crash fixes: unknown metro code from the worker (boost), `json.decode` in pcall, empty
+  metros.json, partial or 1.0.x saves (numbers normalised, old keys "map" and "updated" removed).
+- The badge allows 8 timers: all one-shot delays (toasts, perk, season, return to the map,
+  splash, LED flash) now run from a job list in `on_tick` (`later(ms, fn)`); one LED wave at a
+  time. Peak in the fake badge: 2 timers.
+- Exit in the menu calls `sys.exit()` (returning false only exits on "back").
+- 0.7 s "get ready" before the packet runs; SELECT during it is ignored.
+- Community sync when the piece count crosses a multiple of 10 (extra pieces skipped it);
+  8 s watchdog on check-in; offline at start retries every 5 min.
+- Round id so a late "back to the map" from the last round cannot end the new one.
+- Header subtitle resets on the map; season prompt no longer promises the title stays.
+- Secrets menu (hints, then how once found): PERFECT, FEEDING FRENZY, HOME METRO, NEVER GONNA
+  (konami on the menu). All four: rainbow Mako. No !LAMPs (no `lamps` permission: adding it
+  sends every update to manual review).
+- Worker: season counter can rise by at most 1 per check-in (cap 20), metros fetch has a 2 s
+  timeout and a 5 min retry after a failure, the socket closes with 1011 if the Durable Object
+  call throws.
+- Tests: `tools/fake_badge.py` (Lua 5.5 via lupa, enforces 8 timers / 128 UI objects, counts
+  VM instructions): 33 checks, worst callback ~52k of 200k.
+
+Open:
+- [ ] Deploy the worker: `cd worker && npx wrangler deploy` from the Mac (wrangler is logged in),
+      or add the CLOUDFLARE_API_TOKEN repo secret so the Action works
+- [ ] Publish 1.2.0 on the submit page (app.json, main.lua, art/, data/), try in emulator, run on badge

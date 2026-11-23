@@ -3,3 +3,5 @@ node_modules/
 *.zip
 .env
 .wrangler/
+__pycache__/
+.venv/

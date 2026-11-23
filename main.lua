@@ -15,7 +15,7 @@
 local HOST     = "dz-badge.hypnogaba.workers.dev"          -- also in app.json hosts
 local WS_URL   = "wss://" .. HOST .. "/checkin"
 local MAP_URL  = "https://" .. HOST .. "/map"
-local VERSION  = "1.1"
+local VERSION  = "1.2"
 
 local C = {
   bg = 0x000000, panel = 0x0E0E12, line = 0x24242C,
@@ -117,6 +117,9 @@ local mako = ui.image(LANE_X0, LANE_Y0, makoRows("b", false), { scale = 2 })
 local makoX, makoDir, makoT = LANE_X1, -1, 0
 local frenzy = {}
 local frenzyUntil = 0
+local frenzyWave = false
+local RAINBOW = { "a", "v", "p", "g", "y" }
+local rainbowLook = ""
 
 -- game: lay the fiber ---------------------------------------------------------------------
 local GX0, GX1, GY = 24, 296, BODY_Y + 78
@@ -131,11 +134,11 @@ local gMsg = ui.label(8, GY + 30, "", { size = 14, color = C.text, w = 304 })
 local gHint = ui.label(8, GY + 54, "", { size = 12, color = C.dim, w = 304 })
 
 -- menu / about / qr ------------------------------------------------------------------------
-local MENU = { "Lay fiber on the next dark piece", "How to play", "About DZ Map", "Links and QR codes", "Settings", "Exit" }
+local MENU = { "Lay fiber on the next dark piece", "How to play", "Secrets", "About DZ Map", "Links and QR codes", "Settings", "Exit" }
 local menuSel = 1
 local menuRows = {}
 for i = 1, #MENU do
-  menuRows[i] = ui.label(16, BODY_Y + 4 + (i - 1) * 21, "", { size = 14, color = C.text, w = 296 })
+  menuRows[i] = ui.label(16, BODY_Y + 2 + (i - 1) * 18, "", { size = 14, color = C.text, w = 296 })
 end
 local menuFoot = ui.label(8, BODY_Y + 132, "", { size = 12, color = C.dim, w = 304 })
 
@@ -171,6 +174,21 @@ for i = 1, #SETTINGS do
   setRows[i] = ui.label(16, BODY_Y + 8 + (i - 1) * 26, "", { size = 14, color = C.text, w = 296 })
 end
 local setFoot = ui.label(8, BODY_Y + 100, "", { size = 12, color = C.dim, w = 304 })
+-- Secrets: listed with hints in the menu. All four make Mako a rainbow.
+local SECRETS = {
+  { id = "perfect", name = "PERFECT", hint = "Hit the green dead centre.", how = "SELECT in the middle of the green: +1 piece" },
+  { id = "frenzy", name = "FEEDING FRENZY", hint = "Mako gets hungry after a run of hits.", how = "5 hits in a row: Mako calls her friends" },
+  { id = "home", name = "HOME METRO", hint = "Join Wi-Fi once. Mako finds where you are.", how = "Wi-Fi check-in: pieces near home +1" },
+  { id = "rick", name = "NEVER GONNA", hint = "Menu: up, up, down, down, then left, right...", how = "UP UP DOWN DOWN LEFT RIGHT on the menu" },
+}
+local secRows = {}
+for i = 1, #SECRETS do
+  secRows[i] = {
+    ui.label(8, BODY_Y + 2 + (i - 1) * 32, "", { size = 12, color = C.warn, w = 304 }),
+    ui.label(20, BODY_Y + 16 + (i - 1) * 32, "", { size = 12, color = C.text, w = 292 }),
+  }
+end
+local secFoot = ui.label(8, BODY_Y + 132, "", { size = 12, color = C.purple, w = 304 })
 
 -- state -------------------------------------------------------------------------------------
 local screen = "home"
@@ -183,6 +201,15 @@ local G = storage.get("g")
 if type(G) ~= "table" or type(G.p) ~= "string" or #G.p ~= N then
   G = { p = string.rep("0", N), s = 1, hits = 0, miss = 0, streak = 0, best = 0, day = "", home = nil }
 end
+for _, k in ipairs({ "s", "hits", "miss", "streak", "best" }) do
+  G[k] = math.floor(tonumber(G[k]) or 0)
+end
+if G.s < 1 then G.s = 1 end
+if type(G.day) ~= "string" then G.day = "" end
+if G.home ~= nil and type(G.home) ~= "string" then G.home = nil end
+if type(G.sec) ~= "table" then G.sec = {} end
+storage.remove("map")                                       -- 1.0.x keys, no longer used
+storage.remove("updated")
 if G.leds == nil then G.leds = true end
 if G.seen == nil then G.seen = false end                   -- how-to-play shown once
 local function ledsOn() return G.leds ~= false end
@@ -192,6 +219,9 @@ local sock, gotMsg, loading = nil, false, false
 local spinner, spinPos = nil, 0
 local joinIndex = 1
 local konami, konamiAt = 0, 0
+local loadingAt, synced, lastTry = 0, false, 0
+local makoLine = ""
+local roundId = 0
 local rickTimer = nil
 local game = nil                                            -- the current round
 local lastSync = -1
@@ -222,6 +252,22 @@ local function today()
   local t = sys.time()
   if not t then return "" end
   return tostring(t // 86400)
+end
+-- Delayed jobs run from on_tick: the badge allows only 8 timers at once.
+local jobs = {}
+local function later(ms, fn) jobs[#jobs + 1] = { at = sys.millis() + ms, fn = fn } end
+local function runJobs()
+  if #jobs == 0 then return end
+  local now, due = sys.millis(), {}
+  for k = #jobs, 1, -1 do
+    if jobs[k].at <= now then due[#due + 1] = table.remove(jobs, k) end
+  end
+  for k = #due, 1, -1 do due[k].fn() end
+end
+local function secCount()
+  local n = 0
+  for _, it in ipairs(SECRETS) do if G.sec[it.id] then n = n + 1 end end
+  return n
 end
 local function metroName(code)
   local m = code and metros[code]
@@ -281,6 +327,7 @@ local codes = {}
 for k in pairs(metros) do codes[#codes + 1] = k end
 table.sort(codes)
 local function twoMetros(i)
+  if #codes == 0 then return "?", "?" end
   local inside = metrosIn(i)
   local a = inside[1] or codes[(i * 7) % #codes + 1]
   local b = codes[(i * 13 + math.floor(sys.millis() / 1000)) % #codes + 1]
@@ -302,8 +349,10 @@ local function spinStop()
   if spinner then timer.cancel(spinner) spinner = nil end
   led.off()
 end
+local waveTimer = nil
 local function wave(colour, times)
   if not ledsOn() then return end
+  if waveTimer then timer.cancel(waveTimer) waveTimer = nil end   -- one wave at a time
   local step, n = 0, (times or 2) * (led.count + 2)
   local t
   t = timer.every(45, function()
@@ -318,13 +367,14 @@ local function wave(colour, times)
       end
     end
     step = step + 1
-    if step >= n then timer.cancel(t) led.off() end
+    if step >= n then timer.cancel(t) waveTimer = nil led.off() end
   end)
+  waveTimer = t
 end
 local function flash(colour)
   if not ledsOn() then return end
   for i = 1, led.count do led.hex(i, colour) end
-  timer.after(220, led.off)
+  later(220, led.off)
 end
 
 -- drawing -----------------------------------------------------------------------------------
@@ -406,6 +456,9 @@ local function showOnly(which)
   local st = which == "settings"
   for _, r in ipairs(setRows) do r:show(st) end
   setFoot:show(st)
+  local sc = which == "secrets"
+  for _, r in ipairs(secRows) do r[1]:show(sc) r[2]:show(sc) end
+  secFoot:show(sc)
 end
 
 local function showJoin(i)
@@ -428,7 +481,8 @@ end
 local render
 local function renderMenu()
   for i, r in ipairs(menuRows) do
-    r:text((i == menuSel and "> " or "  ") .. MENU[i])
+    local label = MENU[i] == "Secrets" and ("Secrets  " .. secCount() .. "/" .. #SECRETS) or MENU[i]
+    r:text((i == menuSel and "> " or "  ") .. label)
     r:color(i == menuSel and C.accent or C.text)
   end
   menuFoot:text(communityLine())
@@ -437,6 +491,7 @@ end
 render = function()
   if screen == "home" then
     showOnly("home")
+    subtitle:text(makoLine)
     drawMap()
     status()
     ui.hint("d-pad pick a piece   SELECT lay fiber   CANCEL menu")
@@ -463,6 +518,18 @@ render = function()
     howtoText:text(HOWTO[howtoPage][2])
     howtoFoot:text(howtoPage < #HOWTO and "SELECT next" or "SELECT start laying fiber")
     ui.hint("SELECT next   CANCEL skip")
+  elseif screen == "secrets" then
+    showOnly("secrets")
+    subtitle:text("secrets  " .. secCount() .. "/" .. #SECRETS)
+    for i, it in ipairs(SECRETS) do
+      local got = G.sec[it.id]
+      secRows[i][1]:text((got and "+ " or "? ") .. it.name)
+      secRows[i][1]:color(got and C.accent or C.warn)
+      secRows[i][2]:text(got and it.how or it.hint)
+      secRows[i][2]:color(got and C.dim or C.text)
+    end
+    secFoot:text(secCount() == #SECRETS and "All found: Mako is a rainbow now." or "Find all four: Mako turns rainbow.")
+    ui.hint("CANCEL back")
   elseif screen == "settings" then
     showOnly("settings")
     subtitle:text("settings")
@@ -482,6 +549,20 @@ local function go(s)
   render()
 end
 local function say(text) subtitle:text(text) end
+local function findSecret(id)
+  if G.sec[id] then return end
+  G.sec[id] = true
+  save()
+  local n = secCount()
+  later(1800, function()
+    if n == #SECRETS then
+      ui.toast("All 4 secrets! Mako is a rainbow now.")
+      wave(C.warn, 4)
+    else
+      ui.toast("Secret " .. n .. "/" .. #SECRETS .. " found. Hints: menu > Secrets")
+    end
+  end)
+end
 
 -- rewards -----------------------------------------------------------------------------------
 local function applySkin()
@@ -512,25 +593,25 @@ local function earn(i, perfect)
     local j = nearestDark(i)
     if j and reveal(j) then
       k = k + 1
-      timer.after(600 * k, function() ui.toast(label) end)
+      later(600 * k, function() ui.toast(label) end)
     end
   end
+  save()
   local n = count()
   local p0, p1 = perk(before), perk(n)
   if p1.at > p0.at then
-    timer.after(1200, function()
+    later(1200, function()
       ui.toast("perk: " .. p1.title .. (n >= 50 and p1.at == 50 and " (metro names on)" or ""))
       wave(C.purple, 3)
       applySkin()
     end)
   end
   if n >= N then
-    timer.after(2200, function()
+    later(2200, function()
       ui.toast("The whole map is on fiber. Season " .. G.s .. " complete!")
       wave(C.accent, 5)
     end)
   end
-  save()
   return n - before
 end
 
@@ -539,6 +620,7 @@ local function startSeason()
   G.p = string.rep("0", N)
   fresh = {}
   save()
+  lastSync = -1
   ui.toast("Season " .. G.s .. ": faster packets, same world.")
   applySkin()
   render()
@@ -571,7 +653,8 @@ local function startGame(i)
   gHint:text("SELECT when the packet is in the green")
   subtitle:text("packets wait for no one")
   ui.hint("SELECT now!   CANCEL back")
-  game = { piece = i, t = 0, duration = duration, zx = zx, zw = width, done = false, x = GX0 }
+  roundId = roundId + 1
+  game = { piece = i, t = -700, duration = duration, zx = zx, zw = width, done = false, x = GX0, id = roundId }
   led.off()
 end
 
@@ -579,18 +662,22 @@ local function endGame(hit, perfect)
   if not game or game.done then return end
   game.done = true
   local i = game.piece
+  local got = 0
   if hit then
     G.hits = G.hits + 1
     G.streak = G.streak + 1
     if G.streak > G.best then G.best = G.streak end
-    local got = earn(i, perfect)
+    got = earn(i, perfect)
+    if perfect then findSecret("perfect") end
     gMsg:text(perfect and "PERFECT. Straight down the fiber." or "Connected. Piece lit.")
     gMsg:color(C.accent)
     gHint:text(string.format("+%d piece%s   streak %d", got, got == 1 and "" or "s", G.streak))
     wave(C.accent, 2)
     if G.streak > 0 and G.streak % 5 == 0 then
       frenzyUntil = sys.millis() + 6000
-      timer.after(300, function() ui.toast("streak " .. G.streak .. ": feeding frenzy") end)
+      frenzyWave = true
+      findSecret("frenzy")
+      later(300, function() ui.toast("streak " .. G.streak .. ": feeding frenzy") end)
     end
   else
     G.miss = G.miss + 1
@@ -603,9 +690,10 @@ local function endGame(hit, perfect)
   end
   if hit then
     local n = count()
-    if n % 10 == 0 then lastSync = -1 end                    -- sync community every 10 pieces
-    timer.after(1500, function()
-      if screen == "game" then
+    if n // 10 ~= (n - got) // 10 then lastSync = -1 end     -- sync community every 10 pieces
+    local id = game.id
+    later(1500, function()
+      if screen == "game" and game and game.id == id then
         cursor = nearestDark(i) or cursor
         go("home")
       end
@@ -615,17 +703,20 @@ end
 
 -- check-in: progress up, community totals + location bonus down ------------------------------
 local function apply(d)
+  synced = true
   community = d
   storage.set("c", d)
   local you = d.you
   if you then
-    if you.home and not G.home then
+    if type(you.home) == "string" and you.home ~= "" then findSecret("home") end
+    if type(you.home) == "string" and you.home ~= "" and not G.home then
       G.home = you.home
       save()
       ui.toast("Home metro: " .. metroName(G.home) .. ". Pieces around it count double.")
     end
-    if you.boost and you.metro then
-      local t = tileOf(metros[you.metro].la, metros[you.metro].lo)
+    local bm = you.boost and type(you.metro) == "string" and metros[you.metro]
+    if bm then
+      local t = tileOf(bm.la, bm.lo)
       local got = 0
       for _ = 1, 3 do
         local j = t and nearestDark(t)
@@ -634,7 +725,7 @@ local function apply(d)
       if got > 0 then
         save()
         if lit(cursor) then cursor = nearestDark(cursor) or cursor end
-        timer.after(900, function()
+        later(900, function()
           ui.toast("Near " .. metroName(you.metro) .. ": metro boost, +" .. got)
           wave(C.home, 3)
         end)
@@ -649,8 +740,8 @@ local function fetchMap()
     loading = false
     spinStop()
     if not ok or res.status ~= 200 then return end
-    local d = json.decode(res.body)
-    if type(d) == "table" then
+    local okd, d = pcall(json.decode, res.body)
+    if okd and type(d) == "table" then
       if community and community.you then d.you = nil end
       apply(d)
     end
@@ -660,6 +751,8 @@ end
 local function checkin(quiet)
   if loading then return end
   loading = true
+  loadingAt = sys.millis()
+  lastTry = loadingAt
   if not quiet then spinStart() end
   if not ws then fetchMap() return end
   gotMsg = false
@@ -667,8 +760,8 @@ local function checkin(quiet)
     if event == "open" then
       if sock then sock:send(json.encode({ n = count(), s = G.s })) end
     elseif event == "message" then
-      local d = json.decode(data)
-      if type(d) == "table" then
+      local okd, d = pcall(json.decode, data)
+      if okd and type(d) == "table" then
         gotMsg = true
         loading = false
         spinStop()
@@ -697,8 +790,10 @@ local function rickroll()
   qrUrl:text("scan me. trust me.")
   subtitle:text("you found it")
   ui.hint("CANCEL back")
+  findSecret("rick")
   local hue = 0
-  if rickTimer then timer.cancel(rickTimer) end
+  if rickTimer then timer.cancel(rickTimer) rickTimer = nil end
+  if not ledsOn() then return end
   rickTimer = timer.every(60, function()
     for i = 1, led.count do
       local h = (hue + i * 40) % 240
@@ -713,9 +808,15 @@ end
 
 -- ticks: Mako swims, the packet runs ------------------------------------------------------------
 function on_tick(ms)
+  runJobs()
+  if loading and sys.millis() - loadingAt > 8000 then     -- no answer: give up, try later
+    loading = false
+    spinStop()
+    if sock then sock:close() sock = nil end
+  end
   if screen == "game" and game and not game.done then
     game.t = game.t + ms
-    local x = GX0 + (GX1 - GX0 - 10) * game.t / game.duration
+    local x = GX0 + (GX1 - GX0 - 10) * math.max(0, game.t) / game.duration   -- a short "get ready"
     game.x = x
     gPacket:pos(math.floor(x), GY - 5)
     if game.t >= game.duration then endGame(false) end
@@ -727,6 +828,11 @@ function on_tick(ms)
   local speed = fast and 0.09 or 0.03
   makoX = makoX + makoDir * speed * ms
   local skin = perk(count()).skin
+  if secCount() == #SECRETS then                              -- all secrets: rainbow Mako
+    skin = RAINBOW[(makoT // 300) % #RAINBOW + 1]
+    local look = skin .. (makoDir > 0 and ">" or "<")
+    if look ~= rainbowLook then rainbowLook = look mako:set(makoRows(skin, makoDir > 0)) end
+  end
   if makoX < LANE_X0 then makoX = LANE_X0 makoDir = 1 mako:set(makoRows(skin, true)) end
   if makoX > LANE_X1 then makoX = LANE_X1 makoDir = -1 mako:set(makoRows(skin, false)) end
   local bob = math.floor(math.sin(makoT / 400) * 3)
@@ -735,8 +841,8 @@ function on_tick(ms)
     for i = 1, 3 do
       frenzy[i] = ui.image(LANE_X0 + i * 20, LANE_Y0 - 30 + i * 14, makoRows(skin, false), { scale = 2 })
     end
-    wave(C.bad, 3)
   end
+  if fast and frenzyWave then frenzyWave = false wave(C.bad, 3) end
   if #frenzy > 0 then
     if fast then
       for i, f in ipairs(frenzy) do
@@ -773,6 +879,7 @@ function on_key(k, rep)
   if screen == "game" then
     if k == "select" then
       if rep then return true end
+      if game and not game.done and game.t < 0 then return true end   -- get ready: not yet
       if game and game.done then
         if gMsg and G.streak == 0 then startGame(game.piece) end
         return true
@@ -797,7 +904,7 @@ function on_key(k, rep)
     if k == "down" then moveCursor(0, 1) render() return true end
     if k == "select" then
       if count() >= N then
-        ui.confirm("Start season " .. (G.s + 1) .. "? The map goes dark again, your title stays.", function(yes)
+        ui.confirm("Start season " .. (G.s + 1) .. "? The map goes dark again, packets get faster.", function(yes)
           if yes then startSeason() end
         end)
         return true
@@ -821,10 +928,13 @@ function on_key(k, rep)
         local j = nearestDark(cursor)
         if j then cursor = j startGame(j) else go("home") end
       elseif menuSel == 2 then howtoPage = 1 go("howto")
-      elseif menuSel == 3 then go("about")
-      elseif menuSel == 4 then joinIndex = 1 go("qr")
-      elseif menuSel == 5 then setSel = 1 go("settings")
-      else return false end                                  -- CANCEL-like: exit the app
+      elseif menuSel == 3 then go("secrets")
+      elseif menuSel == 4 then go("about")
+      elseif menuSel == 5 then joinIndex = 1 go("qr")
+      elseif menuSel == 6 then setSel = 1 go("settings")
+      else                                                   -- Exit
+        if sys.exit then sys.exit() else return false end
+      end
       return true
     end
     if k == "back" then go("home") return true end
@@ -847,7 +957,7 @@ function on_key(k, rep)
       elseif setSel == 2 then
         ui.confirm("Reset all progress? Pieces, perks and season go back to zero.", function(yes)
           if yes then
-            G = { p = string.rep("0", N), s = 1, hits = 0, miss = 0, streak = 0, best = 0, day = "", home = G.home, leds = G.leds, seen = true }
+            G = { p = string.rep("0", N), s = 1, hits = 0, miss = 0, streak = 0, best = 0, day = "", home = G.home, leds = G.leds, seen = true, sec = G.sec }
             fresh = {}
             save()
             applySkin()
@@ -863,7 +973,7 @@ function on_key(k, rep)
   end
   if k == "back" then
     if rickTimer then timer.cancel(rickTimer) rickTimer = nil led.off() end
-    if screen == "qr" or screen == "about" or screen == "rick" then go("menu") else go("home") end
+    if screen == "qr" or screen == "about" or screen == "rick" or screen == "secrets" then go("menu") else go("home") end
     return true
   end
   if screen == "qr" then
@@ -882,7 +992,8 @@ end
 
 -- periodic community sync (every 10 pieces, see endGame) ----------------------------------------
 timer.every(4000, function()
-  if lastSync == -1 and screen == "home" and not loading then
+  if screen ~= "home" or loading then return end
+  if lastSync == -1 or (not synced and sys.millis() - lastTry > 300000) then   -- offline at start: retry every 5 min
     lastSync = count()
     checkin(true)
   end
@@ -895,6 +1006,7 @@ do
 end
 applySkin()
 local line = MAKO_SAYS[(sys.millis() + (sys.time() or 0)) % #MAKO_SAYS + 1]
+makoLine = line
 say(line)
 screen = "splash"
 showOnly("splash")
@@ -902,7 +1014,7 @@ splashMako:set(makoRows(perk(count()).skin, true))
 splashSub:text(line)
 ui.hint("")
 wave(C.accent, 1)
-timer.after(1600, function()
+later(1600, function()
   if screen ~= "splash" then return end
   if G.seen then go("home") else howtoPage = 1 go("howto") end
 end)

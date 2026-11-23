@@ -47,12 +47,15 @@ let metrosCache: { at: number; list: Metro[] } = { at: 0, list: METROS_FALLBACK 
 async function metros(): Promise<Metro[]> {
   if (Date.now() - metrosCache.at < 3600_000) return metrosCache.list;
   try {
-    const r = await fetch(`${DZ}/api/dz/metros?limit=200`, { cf: { cacheTtl: 3600 } }).then((x) => x.json<any>());
+    const r = await fetch(`${DZ}/api/dz/metros?limit=200`, { cf: { cacheTtl: 3600 }, signal: AbortSignal.timeout(2000) })
+      .then((x) => x.json<any>());
     const list = (r.items ?? [])
       .filter((m: any) => m.code && typeof m.lat === 'number' && typeof m.lon === 'number')
       .map((m: any) => ({ code: String(m.code).toLowerCase(), n: String(m.name ?? m.code), la: m.lat, lo: m.lon }));
     if (list.length >= 10) metrosCache = { at: Date.now(), list };
-  } catch { /* keep the fallback */ }
+  } catch {
+    metrosCache = { ...metrosCache, at: Date.now() - 3600_000 + 300_000 }; // keep the last list, retry in 5 min
+  }
   return metrosCache.list;
 }
 function km(la1: number, lo1: number, la2: number, lo2: number): number {
@@ -142,7 +145,9 @@ export class MapState {
     s.badges[who.badge] = b;
     s.checkins++;
     if (typeof who.n === 'number' && who.n >= 0 && who.n <= 100) b.n = Math.floor(who.n);
-    if (typeof who.s === 'number' && who.s >= 1 && who.s <= 99) b.s = Math.floor(who.s);
+    // A season takes 100 pieces: a badge can move up at most one season per check-in, and
+    // never past 20, so one badge cannot inflate the community total.
+    if (typeof who.s === 'number' && who.s >= 1) b.s = Math.min(20, Math.floor(who.s), b.s + 1);
     b.at = now;
 
     let near: { code: string; km: number } | null = null;
@@ -197,9 +202,13 @@ export default {
         });
         ctx.waitUntil((async () => {
           Object.assign(body, await progress);
-          const result = await map.fetch('https://map/checkin', { method: 'POST', body: JSON.stringify(body) }).then((r) => r.text());
-          server.send(result);
-          setTimeout(() => { try { server.close(1000, 'done'); } catch { /* closed already */ } }, 300);
+          try {
+            const result = await map.fetch('https://map/checkin', { method: 'POST', body: JSON.stringify(body) }).then((r) => r.text());
+            server.send(result);
+            setTimeout(() => { try { server.close(1000, 'done'); } catch { /* closed already */ } }, 300);
+          } catch {
+            try { server.close(1011, 'error'); } catch { /* closed already */ }
+          }
         })());
         return new Response(null, { status: 101, webSocket: client });
       }

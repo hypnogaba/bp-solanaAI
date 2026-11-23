@@ -19,7 +19,7 @@ into a feeding frenzy on a streak of five.
   - CANCEL: menu
 - **Lay the fiber**: the packet runs from one metro to another. SELECT in the green = the piece
   is lit; dead centre = PERFECT, one extra piece. Miss: SELECT to try again, CANCEL to go back.
-- **Menu**: next dark piece, about, links and QR codes (X, website, Discord, source), exit.
+- **Menu**: next dark piece, how to play, secrets (hints for the four secrets; all four make Mako a rainbow), about, links and QR codes (X, website, Discord, source), settings, exit.
   The community line shows how many pieces all badges have laid, when Wi-Fi was on once.
 
 ## Perks and bonuses
