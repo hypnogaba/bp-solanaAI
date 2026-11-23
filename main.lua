@@ -206,9 +206,9 @@ end
 local setFoot = ui.label(8, BODY_Y + 100, "", { size = 12, color = C.dim, w = 304 })
 -- Secrets: listed with hints in the menu. All four make the shark a rainbow.
 local SECRETS = {
-  { id = "perfect", name = "PERFECT", hint = "While splicing: SELECT dead centre of the green.", how = "SELECT in the middle of the green: +50" },
-  { id = "zero", name = "DOUBLE ZERO", hint = "While splicing: PERFECT, and again right after.", how = "2 PERFECT splices in a row: zero gap, zero loss" },
-  { id = "home", name = "HOME METRO", hint = "Join Wi-Fi, open the app: it finds your metro.", how = "Wi-Fi check-in: home region needs a splice less" },
+  { id = "perfect", name = "PERFECT", hint = "Splicing: SELECT dead centre of the green.", how = "SELECT in the middle of the green: +50" },
+  { id = "zero", name = "DOUBLE ZERO", hint = "Splicing: PERFECT, then PERFECT again.", how = "2 PERFECT in a row: zero gap, zero loss" },
+  { id = "home", name = "HOME METRO", hint = "Join Wi-Fi, open the app: it finds your metro.", how = "Wi-Fi: your home region needs a splice less" },
   { id = "rick", name = "NEVER GONNA", hint = "On the main menu: up up down down, then...", how = "UP UP DOWN DOWN LEFT RIGHT on the main menu" },
 }
 local secRows = {}
