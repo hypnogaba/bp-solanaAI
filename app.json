@@ -1,7 +1,7 @@
 {
   "id": "dzstat",
   "name": "DZ Map",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": "@hypnogaba",
   "summary": "Light the world on DoubleZero fiber: 13 regions, a bouncing packet, 3 lives, 4 secrets, online leaderboard, share on X.",
   "icon": "gps",

@@ -16,7 +16,7 @@
 local HOST     = "dz-badge.hypnogaba.workers.dev"          -- also in app.json hosts
 local WS_URL   = "wss://" .. HOST .. "/checkin"
 local MAP_URL  = "https://" .. HOST .. "/map"
-local VERSION  = "1.3"
+local VERSION  = "1.3.1"
 
 local C = {
   bg = 0x000000, panel = 0x0E0E12, line = 0x24242C,
@@ -173,13 +173,26 @@ local aboutText = ui.label(8, BODY_Y + 34, "", { size = 12, color = C.dim, w = 3
 local credit = ui.label(8, ui.H - 16 - 30, "", { size = 12, color = C.dim, w = 304 })
 local credit2 = ui.label(8, ui.H - 16 - 16, "", { size = 12, color = C.accent, w = 304 })
 
-local qr = ui.qr and ui.qr(8, BODY_Y, 130, LINKS[1].url) or nil
+-- The badge draws one QR code at a time: the links screen and the share screen take turns
+-- with it (made at the size the screen wants, moved and re-texted otherwise).
+local QR = { at = { link = { 8, BODY_Y, 130 }, share = { 146, BODY_Y - 4, 168 } } }
+function QR.use(kind, text)
+  if not ui.qr then return nil end
+  local p = QR.at[kind]
+  if QR.obj and QR.size ~= p[3] then QR.obj:remove() QR.obj = nil end
+  if QR.obj then
+    QR.obj:pos(p[1], p[2]) QR.obj:text(text) QR.obj:show(true)
+  else
+    local ok, o = pcall(ui.qr, p[1], p[2], p[3], text)   -- low on memory: the screen without it
+    QR.obj, QR.size = ok and o or nil, p[3]
+  end
+  return QR.obj
+end
 local qrTitle = ui.label(150, BODY_Y + 10, "", { size = 20, color = C.text, w = 160 })
 local qrSub = ui.label(150, BODY_Y + 40, "", { size = 12, color = C.dim, w = 160 })
 local qrUrl = ui.label(150, BODY_Y + 60, "", { size = 12, color = C.accent, w = 160 })
 local qrHint = ui.label(150, BODY_Y + 100, "scan with your phone", { size = 12, color = C.dim, w = 160 })
 -- share on X: a bigger QR on the right, the score on the left
-local shareQr = ui.qr and ui.qr(146, BODY_Y - 4, 168, "https://x.com/doublezero") or nil
 local shTitle = ui.label(8, BODY_Y + 4, "Share on X", { size = 20, color = C.text, w = 136 })
 local shScore = ui.label(8, BODY_Y + 40, "", { size = 20, color = C.warn, w = 136 })
 local shNote = ui.label(8, BODY_Y + 70, "", { size = 12, color = C.dim, w = 136 })
@@ -499,7 +512,7 @@ local function showOnly(which)
   local about = which == "about"
   bigMako:show(about) aboutTitle:show(about) aboutText:show(about) credit:show(about) credit2:show(about)
   local q = which == "qr"
-  if qr then qr:show(q) end
+  if QR.obj and not q and which ~= "share" then QR.obj:show(false) end
   qrTitle:show(q) qrSub:show(q) qrUrl:show(q) qrHint:show(q)
   local sp = which == "splash"
   splashMako:show(sp) splashTitle:show(sp) splashSub:show(sp)
@@ -512,7 +525,6 @@ local function showOnly(which)
   for _, r in ipairs(secRows) do r[1]:show(sc) r[2]:show(sc) end
   secFoot:show(sc)
   local sh = which == "share"
-  if shareQr then shareQr:show(sh) end
   shTitle:show(sh) shScore:show(sh) shNote:show(sh)
   local lb = which == "board"
   for _, r in ipairs(lbRows) do r:show(lb) end
@@ -524,7 +536,7 @@ end
 local function showJoin(i)
   joinIndex = ((i - 1) % #LINKS) + 1
   local l = LINKS[joinIndex]
-  if qr then qr:text(l.url) end
+  QR.use("link", l.url)
   qrTitle:text(l.title)
   qrSub:text(l.sub)
   qrUrl:text((l.url:gsub("^https://", "")))
@@ -930,7 +942,7 @@ local RICK = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 local function rickroll()
   screen = "rick"
   showOnly("qr")
-  if qr then qr:text(RICK) end
+  QR.use("link", RICK)
   qrTitle:text("Never gonna")
   qrSub:text("give you up")
   qrUrl:text("scan me. trust me.")
@@ -984,9 +996,9 @@ local function openShare(back)
   local url = "https://x.com/intent/post?text=" .. urlenc(text) .. "&url=" .. urlenc(link)
   screen = "share"
   showOnly("share")
-  if shareQr then shareQr:text(url) end
+  local q = QR.use("share", url)
   shScore:text(tostring(score))
-  shNote:text(shareQr and (n .. "/13 regions. Scan with your phone: X opens with the post and a picture.")
+  shNote:text(q and (n .. "/13 regions. Scan with your phone: X opens with the post and a picture.")
                        or "Update Solana OS to show the QR.")
   subtitle:text("share")
   ui.hint("CANCEL back")

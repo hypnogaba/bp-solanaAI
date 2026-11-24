@@ -12,15 +12,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 MOCK = r"""
 local PY = ...
-local objs = 0
+local objs, qrs = 0, 0
 local function obj(kind)
   objs = objs + 1
   if objs > 128 then error("more than 128 UI objects") end
+  if kind == "qr" then
+    qrs = qrs + 1
+    if qrs > 1 then error("ui.qr: 1 QR code at a time (change its text, or remove it first)") end
+  end
   local o = { kind = kind, shown = true, txt = "" }
   return setmetatable(o, { __index = function(t, k)
     if k == "text" then return function(self, v) if v ~= nil then self.txt = v end return self.txt end end
     if k == "show" then return function(self, v) self.shown = v end end
-    if k == "remove" then return function(self) objs = objs - 1 end end
+    if k == "remove" then return function(self) objs = objs - 1 if self.kind == "qr" then qrs = qrs - 1 end end end
     if k == "get" then return function(self, x, y) return (x + y) % 3 == 0 end end
     return function() end
   end })
@@ -28,7 +32,12 @@ end
 ui = { W = 320, H = 218 }
 function ui.bg() end
 for _, k in ipairs({ "label", "rect", "image", "canvas", "qr", "gradient", "bar" }) do
-  ui[k] = function() return obj(k) end
+  ui[k] = function(...)
+    local o = obj(k)
+    o.args = { ... }
+    if k == "qr" then o.txt = o.args[4] end   -- ui.qr(x, y, size, text) shows text at once
+    return o
+  end
 end
 function ui.load() return {} end
 function ui.hint(t) PY.hint(t) end
@@ -117,7 +126,7 @@ class Badge:
                        " __game = function() return game end; __loading = function() return loading end;"
                        " __next = function() local j = nearestDark(cursor) cursor = j startGame(j) end;"
                        " __apply = apply; __cursor = function() return cursor end; __count = count;"
-                       " __party = function() return party end; __shareQr = function() return shareQr end;"
+                       " __party = function() return party end; __shareQr = function() return QR.obj end;"
                        " __lb = function() return lbRows end; __N = N; __start = startGame;"
                        " __track_step = function() return TRACK * GAME_TICK / passTime() end")
 
@@ -407,6 +416,24 @@ b7.key("back")
 check("CANCEL from share: back to the board", b7.g("__screen") == "board")
 b7.key("back")
 check("CANCEL from the board: menu", b7.g("__screen") == "menu")
+# one QR code at a time on the badge: Links and Share take turns with it
+for _ in range(2):                     # the menu keeps its row: Leaderboard (4) -> Links (6)
+    b7.key("down")
+b7.key("select")
+q = b7.g("__shareQr")
+check("menu item 6: Links with a small QR beside the text", b7.g("__screen") == "qr" and q.shown and q.args[3] == 130
+      and q.txt.startswith("https://") and "intent" not in q.txt)
+b7.key("back")
+for _ in range(2):
+    b7.key("up")
+b7.key("select")
+b7.key("up")
+q = b7.g("__shareQr")
+check("Links, then share: the big QR shows the X post", b7.g("__screen") == "share" and q.shown and q.args[3] == 168
+      and q.txt.startswith("https://x.com/intent/post"))
+b7.key("back")
+b7.key("back")
+check("CANCEL from share and the board: menu, no QR left on screen", b7.g("__screen") == "menu" and not b7.g("__shareQr").shown)
 b8 = fresh(ws_answer=None)
 b8.tick(30, 300)
 b8.key("back")
